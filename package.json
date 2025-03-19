@@ -1,0 +1,40 @@
+{
+    "name": "portal-prestamos-alfin-cash",
+    "version": "1.0.0",
+    "description": "Portal web para gestión de préstamos personales",
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "nodemon src/server.js",
+        "backup": "node tools/backup.js",
+        "restore": "node tools/restore.js",
+        "seed": "node tools/seed.js",
+        "clear-db": "node tools/clear-db.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "préstamos",
+        "finanzas",
+        "gestión",
+        "mongo",
+        "express"
+    ],
+    "author": "ALFIN CASH",
+    "license": "ISC",
+    "dependencies": {
+        "bootstrap": "^5.3.2",
+        "chart.js": "^4.4.8",
+        "compression": "^1.8.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "mongoose": "^7.8.6",
+        "morgan": "^1.10.0",
+        "nodemailer": "^6.10.0",
+        "pdfkit": "^0.13.0",
+        "uuid": "^9.0.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.9"
+    }
+}

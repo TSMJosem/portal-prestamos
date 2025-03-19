@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes - ALFIN CASH</title>
+</head>
+<body>
+    <div class="container-fluid">
+        <h2 class="mb-4">Reportes y Estadísticas</h2>
+        
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Generación de Reportes</h6>
+                <div class="btn-group">
+                    <button type="button" id="btnExportarExcel" class="btn btn-success">
+                        <i class="fas fa-file-excel"></i> Exportar a Excel
+                    </button>
+                    <button type="button" id="btnExportarPDF" class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Exportar a PDF
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="tipoReporte" class="form-label">Seleccione el tipo de reporte</label>
+                        <select class="form-select" id="tipoReporte">
+                            <option value="general" selected>Reporte General</option>
+                            <option value="prestamos_mes">Préstamos por Mes</option>
+                            <option value="pagos_mes">Pagos por Mes</option>
+                            <option value="clientes_activos">Clientes Activos</option>
+                            <option value="prestamos_monto">Préstamos por Monto</option>
+                            <option value="prestamos_vencidos">Préstamos Vencidos</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="reporteContenido">
+                    <div class="loading"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts para exportación -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.0/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.5.0-beta4/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</body>
+</html>

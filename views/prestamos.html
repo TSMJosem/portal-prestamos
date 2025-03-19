@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Préstamos - ALFIN CASH</title>
+</head>
+<body>
+    <div class="container-fluid">
+        <h2 class="mb-4">Gestión de Préstamos</h2>
+        
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Préstamos Registrados</h6>
+                <div class="dropdown no-arrow">
+                    <a href="#" class="nav-link" data-page="nuevo-prestamo">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-plus fa-sm"></i> Nuevo Préstamo
+                        </button>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Buscar préstamo..." id="buscarPrestamo">
+                            <button class="btn btn-outline-secondary" type="button">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-right">
+                        <div class="d-none d-md-inline-block form-inline ml-auto mr-0 mr-md-3 my-2 my-md-0">
+                            <span class="mr-2">Total de préstamos: <span id="contadorPrestamos" class="badge bg-primary">0</span></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="tablaPrestamos" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Cliente</th>
+                                <th>Fecha</th>
+                                <th>Monto</th>
+                                <th>Interés</th>
+                                <th>Progreso</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Los datos se cargarán dinámicamente con JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Detalles Préstamo -->
+    <div class="modal fade" id="modalDetallesPrestamo" tabindex="-1" aria-labelledby="modalDetallesPrestamoLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalDetallesPrestamoLabel">Detalles del Préstamo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs" id="detallesPrestamoTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="detalles-prestamo-tab" data-bs-toggle="tab" data-bs-target="#detalles-prestamo" type="button" role="tab" aria-controls="detalles-prestamo" aria-selected="true">Información General</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="pagos-tab" data-bs-toggle="tab" data-bs-target="#pagos" type="button" role="tab" aria-controls="pagos" aria-selected="false">Pagos</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="amortizacion-tab" data-bs-toggle="tab" data-bs-target="#amortizacion" type="button" role="tab" aria-controls="amortizacion" aria-selected="false">Tabla de Amortización</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content pt-3" id="detallesPrestamoTabsContent">
+                        <div class="tab-pane fade show active" id="detalles-prestamo" role="tabpanel" aria-labelledby="detalles-prestamo-tab">
+                            <div class="detalles-prestamo">
+                                <!-- Información del préstamo se cargará dinámicamente -->
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="pagos" role="tabpanel" aria-labelledby="pagos-tab">
+                            <div class="pagos-prestamo">
+                                <!-- Lista de pagos se cargará dinámicamente -->
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="amortizacion" role="tabpanel" aria-labelledby="amortizacion-tab">
+                            <div class="tabla-amortizacion">
+                                <!-- Tabla de amortización se cargará dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" onclick="iniciarPago(prestamoActual)">
+                        <i class="fas fa-dollar-sign"></i> Registrar Pago
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="window.open(`/api/prestamos/${prestamoActual}/recibo`, '_blank')">
+                        <i class="fas fa-file-pdf"></i> Ver Recibo
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Registrar Pago -->
+    <div class="modal fade" id="modalRegistrarPago" tabindex="-1" aria-labelledby="modalRegistrarPagoLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalRegistrarPagoLabel">Registrar Pago</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formRegistrarPago">
+                        <input type="hidden" id="prestamoId" name="prestamoId">
+                        <div class="mb-3">
+                            <label for="numeroPago" class="form-label">Cuota a Pagar</label>
+                            <select class="form-select" id="numeroPago" name="numeroPago" required>
+                                <option value="">Seleccione la cuota a pagar...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cantidadPagada" class="form-label">Monto a Pagar</label>
+                            <input type="number" class="form-control" id="cantidadPagada" name="cantidadPagada" step="0.01" min="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tipoPago" class="form-label">Tipo de Pago</label>
+                            <select class="form-select" id="tipoPago" name="tipoPago" required>
+                                <option value="">Seleccione...</option>
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Transferencia">Transferencia</option>
+                                <option value="Tarjeta">Tarjeta</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fechaPago" class="form-label">Fecha de Pago</label>
+                            <input type="date" class="form-control" id="fechaPago" name="fechaPago" value="${new Date().toISOString().split('T')[0]}" readonly>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Registrar Pago</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Variable global para almacenar el ID del préstamo actual en el modal
+        let prestamoActual = null;
+    </script>
+</body>
+</html>
