@@ -1,5 +1,13 @@
 // Script principal de la aplicación - Portal de Préstamos
 
+const appState = {
+    currentPage: 'dashboard',
+    previousPage: '',
+    pageLoadTimestamps: {},
+    loadingStates: {},
+    navigationHistory: []
+};
+
 // Función para interceptar APIs faltantes
 function interceptarAPIs() {
     const originalFetch = window.fetch;
@@ -139,20 +147,27 @@ function handleNavClick(e) {
         return;
     }
     
-    console.log(`Navegando a: ${targetPage}`);
+    // Si intentamos ir a la misma página, verificar si necesita recarga
+    if (targetPage === appState.currentPage) {
+        const lastLoad = appState.pageLoadTimestamps[targetPage] || 0;
+        const timeSinceLoad = Date.now() - lastLoad;
+        
+        // Si pasaron más de 5 minutos, recargar la página
+        if (timeSinceLoad > 300000) {
+            console.log(`La página ${targetPage} no se ha recargado en ${Math.round(timeSinceLoad/1000)}s, recargando...`);
+        } else {
+            console.log(`Ya estás en la página ${targetPage}`);
+            return; // Evitar recargar innecesariamente
+        }
+    }
     
-    // MODIFICADO: Guardar página anterior para diagnóstico
-    const previousPage = window.currentPage;
-    window.previousPage = previousPage;
+    console.log(`Navegando a: ${targetPage}`);
     
     // Marcar enlace activo
     document.querySelectorAll('.nav-link, [data-page]').forEach(link => {
         link.classList.remove('active');
     });
     this.classList.add('active');
-    
-    // NUEVO: Limpiar cualquier estado temporal de la página anterior
-    cleanupPreviousPage(previousPage);
     
     // Cargar la página
     loadPage(targetPage);
@@ -169,35 +184,53 @@ function handleNavClick(e) {
 function cleanupPreviousPage(pageName) {
     if (!pageName) return;
     
-    console.log(`Limpiando estado de página anterior: ${pageName}`);
+    console.log(`Limpiando recursos de página anterior: ${pageName}`);
+    appState.loadingStates[pageName] = false;
     
-    // Operaciones específicas de limpieza según el módulo
+    // Limpiar módulos específicos que tienen funciones de limpieza
     switch(pageName) {
-        case 'dashboard':
-            // Limpiar gráficos para evitar problemas de reutilización de canvas
-            limpiarGraficosDashboard();
-            break;
         case 'clientes':
-            // Limpiar variables globales para evitar interferencias
-            window.clienteSeleccionado = null;
-            // No limpiar clientes para optimizar carga
+            // Usar la nueva función de limpieza si está disponible
+            if (typeof window.limpiarRecursosClientes === 'function') {
+                window.limpiarRecursosClientes();
+            } else {
+                // Respaldo para compatibilidad
+                window.clientesModuloInicializado = false;
+            }
             break;
+            
         case 'prestamos':
+            // También podríamos agregar funciones de limpieza similares
+            // para los otros módulos
             window.prestamoSeleccionado = null;
             break;
+            
         case 'pagos':
             window.pagoEnProceso = null;
             break;
-        // Otros casos específicos según necesidad
     }
     
-    // Limpiar temporizadores o intervalos generados por la página anterior
-    // (si se identifican problemas específicos con estos)
+    // Cancelar cualquier petición fetch pendiente (usando AbortController)
+    if (window.activeControllers && window.activeControllers[pageName]) {
+        try {
+            window.activeControllers[pageName].abort();
+            console.log(`Peticiones pendientes para ${pageName} canceladas`);
+        } catch (e) {
+            console.error(`Error al cancelar peticiones de ${pageName}:`, e);
+        }
+    }
 }
 
 // Cargar página - VERSIÓN MEJORADA
 function loadPage(pageName) {
     console.log(`Cargando página: ${pageName}`);
+    
+    // Guardar historial de navegación
+    appState.navigationHistory.push(pageName);
+    
+    // NUEVO: Limpiar recursos de la página anterior
+    const previousPage = appState.currentPage;
+    cleanupPreviousPage(previousPage);
     
     // NUEVO: Indicar visualmente el cambio de página
     const pageContent = document.querySelector('#pageContent');
@@ -209,7 +242,13 @@ function loadPage(pageName) {
     }
     
     // Actualizar estado
-    window.currentPage = pageName;
+    appState.previousPage = appState.currentPage;
+    appState.currentPage = pageName;
+    window.currentPage = pageName; // Para compatibilidad
+    
+    // Registrar timestamp de carga
+    appState.pageLoadTimestamps[pageName] = Date.now();
+    appState.loadingStates[pageName] = true;
     
     // Obtener el contenedor principal
     const mainContainer = document.querySelector('#main-content');
@@ -230,7 +269,11 @@ function loadPage(pageName) {
     loadPageContent(pageName, mainContainer);
 }
 
+// NUEVO: Sistema de gestión de peticiones fetch con timeout y cancelación
+window.activeControllers = {};
+
 // Función separada para cargar contenido - MODIFICADA PARA AJUSTARSE A TU ESTRUCTURA
+// MODIFICADO: Función para carga de contenido con gestión de errores mejorada
 function loadPageContent(pageName, container) {
     // Ocultar todas las páginas existentes
     document.querySelectorAll('.page-content').forEach(page => {
@@ -243,36 +286,82 @@ function loadPageContent(pageName, container) {
         console.log(`La página ${pageName} ya está cargada, mostrándola`);
         existingPage.classList.add('active');
         
-        // NUEVO: Asegurarse de que la página se inicialice correctamente incluso si ya está cargada
+        // MEJORADO: Asegurarse de que la página se inicialice correctamente
         setTimeout(() => {
             initPageScripts(pageName);
+            appState.loadingStates[pageName] = false;
         }, 100);
         return;
     }
     
-    // Mostrar indicador de carga
+    // Mostrar indicador de carga mejorado
     container.innerHTML = `
         <div id="pageLoading" class="d-flex justify-content-center align-items-center my-5">
-            <div class="spinner-border text-primary" role="status">
+            <div class="spinner-border text-primary me-3" role="status">
                 <span class="visually-hidden">Cargando...</span>
             </div>
-            <span class="ms-3">Cargando ${pageName}...</span>
+            <div>
+                <h5 class="mb-1">Cargando ${pageName}...</h5>
+                <div class="progress" style="height: 5px; width: 200px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                </div>
+            </div>
         </div>
     `;
     
-    // MODIFICACIÓN: Ahora intentamos cargar directamente desde /views
+    // NUEVO: Crear AbortController para poder cancelar la petición
+    if (window.activeControllers[pageName]) {
+        window.activeControllers[pageName].abort();
+    }
+    window.activeControllers[pageName] = new AbortController();
+    
+    // NUEVO: Establecer timeout para la carga
+    const timeoutId = setTimeout(() => {
+        if (appState.loadingStates[pageName]) {
+            console.warn(`La carga de ${pageName} está tardando demasiado, posible problema de red`);
+            
+            // Mostrar mensaje de timeout
+            const loadingElement = document.getElementById('pageLoading');
+            if (loadingElement) {
+                loadingElement.innerHTML = `
+                    <div class="alert alert-warning" role="alert">
+                        <h5><i class="fas fa-exclamation-triangle me-2"></i>La carga está tardando más de lo esperado</h5>
+                        <p>La página ${pageName} está tardando demasiado en cargar.</p>
+                        <button class="btn btn-primary" onclick="loadPage('${pageName}')">
+                            <i class="fas fa-sync-alt"></i> Reintentar
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // Abortar la petición
+            if (window.activeControllers[pageName]) {
+                window.activeControllers[pageName].abort();
+            }
+        }
+    }, 15000); // 15 segundos
+    
+    // MODIFICACIÓN: Ahora intentamos cargar directamente desde /views con control de errores mejorado
     console.log(`Intentando cargar plantilla: /views/${pageName}.html`);
     
-    fetch(`/views/${pageName}.html`)
+    fetch(`/views/${pageName}.html`, { 
+        signal: window.activeControllers[pageName].signal,
+        headers: { 'Cache-Control': 'no-cache' } // Evitar caché del navegador
+    })
         .then(response => {
             if (!response.ok) {
                 // Intentar ruta alternativa si la primera falla
                 console.log(`Intentando ruta alternativa: /${pageName}.html`);
-                return fetch(`/${pageName}.html`);
+                return fetch(`/${pageName}.html`, { 
+                    signal: window.activeControllers[pageName].signal,
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
             }
             return response;
         })
         .then(response => {
+            clearTimeout(timeoutId); // Limpiar el timeout
+            
             if (!response.ok) {
                 console.error(`Error ${response.status} al cargar ${pageName}`);
                 throw new Error(`Error al cargar la página ${pageName}`);
@@ -280,6 +369,8 @@ function loadPageContent(pageName, container) {
             return response.text();
         })
         .then(html => {
+            appState.loadingStates[pageName] = false;
+            
             // Reemplazar indicador de carga
             container.innerHTML = '';
             
@@ -294,30 +385,42 @@ function loadPageContent(pageName, container) {
             
             // NUEVO: Dar tiempo al DOM para actualizarse antes de inicializar scripts
             requestAnimationFrame(() => {
-                setTimeout(() => initPageScripts(pageName), 100);
+                setTimeout(() => {
+                    initPageScripts(pageName);
+                    // Actualizar timestamp después de carga exitosa
+                    appState.pageLoadTimestamps[pageName] = Date.now();
+                }, 100);
             });
         })
         .catch(error => {
-            console.error('Error:', error);
+            clearTimeout(timeoutId); // Limpiar el timeout
+            appState.loadingStates[pageName] = false;
             
-            // Usar contenido predeterminado en caso de error
-            container.innerHTML = '';
-            
-            // Crear nuevo contenedor para la página
-            const pageContainer = document.createElement('div');
-            pageContainer.id = pageName;
-            pageContainer.className = 'page-content active';
-            pageContainer.innerHTML = generarContenidoPredeterminado(pageName);
-            
-            // Agregar al contenedor
-            container.appendChild(pageContainer);
-            
-            // NUEVO: Dar tiempo al DOM para actualizarse antes de inicializar scripts
-            requestAnimationFrame(() => {
-                setTimeout(() => initPageScripts(pageName), 100);
-            });
-            
-            console.warn(`Usando contenido predeterminado para ${pageName} debido a error de carga`);
+            // Solo mostrar error si no fue una cancelación deliberada
+            if (error.name !== 'AbortError') {
+                console.error('Error:', error);
+                
+                // Usar contenido predeterminado en caso de error
+                container.innerHTML = '';
+                
+                // Crear nuevo contenedor para la página
+                const pageContainer = document.createElement('div');
+                pageContainer.id = pageName;
+                pageContainer.className = 'page-content active';
+                pageContainer.innerHTML = generarContenidoPredeterminado(pageName);
+                
+                // Agregar al contenedor
+                container.appendChild(pageContainer);
+                
+                // NUEVO: Dar tiempo al DOM para actualizarse antes de inicializar scripts
+                requestAnimationFrame(() => {
+                    setTimeout(() => initPageScripts(pageName), 100);
+                });
+                
+                console.warn(`Usando contenido predeterminado para ${pageName} debido a error de carga`);
+            } else {
+                console.log(`Carga de ${pageName} cancelada`);
+            }
         });
 }
 
@@ -447,50 +550,77 @@ function generarContenidoPredeterminado(pageName) {
 function initPageScripts(pageName) {
     // Asegurarse de que la página actual está actualizada
     window.currentPage = pageName;
+    appState.currentPage = pageName;
     
     // NUEVO: Registro detallado para depuración
     console.log(`Inicializando scripts para página: ${pageName}`);
     
-    switch (pageName) {
-        case 'clientes':
-            // Mejorar la carga del módulo de clientes con reintento y diagnóstico
-            console.log('Inicializando página de clientes...');
-            
-            // MODIFICADO: Usar una función más robusta para inicializar clientes
-            initClientesModulo();
-            break;
-            
-        case 'prestamos':
-            if (typeof initPrestamosPage === 'function') {
-                initPrestamosPage();
-            } else {
-                cargarScriptModulo('prestamos');
+    try {
+        switch (pageName) {
+            case 'clientes':
+                // MEJORADO: Usar una función más robusta para inicializar clientes
+                if (typeof initClientesPage === 'function') {
+                    initClientesPage();
+                } else {
+                    console.warn('Función initClientesPage no encontrada, cargando script...');
+                    cargarScriptModulo('clientes', true); // Segundo parámetro indica inicialización automática
+                }
+                break;
+                
+            case 'prestamos':
+                if (typeof initPrestamosPage === 'function') {
+                    initPrestamosPage();
+                } else {
+                    cargarScriptModulo('prestamos', true);
+                }
+                break;
+                
+            case 'pagos':
+                // MEJORADO: Inicialización de pagos
+                if (typeof initPagosPage === 'function') {
+                    initPagosPage();
+                } else {
+                    cargarScriptModulo('pagos', true);
+                }
+                break;
+                
+            case 'nuevo-prestamo':
+                if (typeof initNuevoPrestamoPage === 'function') {
+                    initNuevoPrestamoPage();
+                } else {
+                    cargarScriptModulo('nuevo-prestamo', true);
+                }
+                break;
+                
+            case 'reportes':
+                if (typeof initReportesPage === 'function') {
+                    initReportesPage();
+                } else {
+                    cargarScriptModulo('reportes', true);
+                }
+                break;
+                
+            case 'dashboard':
+            default:
+                // Establecer página como dashboard si estamos en la página principal
+                window.currentPage = 'dashboard';
+                appState.currentPage = 'dashboard';
+                loadDashboardData();
+                break;
+        }
+    } catch (error) {
+        console.error(`Error al inicializar scripts para ${pageName}:`, error);
+        showNotification(`Error al inicializar la página ${pageName}. Intente recargar.`, 'error');
+        
+        // Intento de recuperación
+        setTimeout(() => {
+            console.log(`Intentando recuperación para ${pageName}...`);
+            try {
+                cargarScriptModulo(pageName, true);
+            } catch (e) {
+                console.error('Falló intento de recuperación', e);
             }
-            break;
-        case 'pagos':
-            // NUEVO: Mejorar inicialización de pagos
-            initPagosModulo();
-            break;
-        case 'nuevo-prestamo':
-            if (typeof initNuevoPrestamoPage === 'function') {
-                initNuevoPrestamoPage();
-            } else {
-                cargarScriptModulo('prestamos');
-            }
-            break;
-        case 'reportes':
-            if (typeof initReportesPage === 'function') {
-                initReportesPage();
-            } else {
-                cargarScriptModulo('reportes');
-            }
-            break;
-        case 'dashboard':
-        default:
-            // Establecer página como dashboard si estamos en la página principal
-            window.currentPage = 'dashboard';
-            loadDashboardData();
-            break;
+        }, 2000);
     }
 }
 
@@ -575,7 +705,7 @@ function initPagosModulo() {
 }
 
 // Cargar script de módulo
-function cargarScriptModulo(modulo) {
+function cargarScriptModulo(modulo, autoInit = false) {
     console.log(`Cargando script para el módulo ${modulo}...`);
     
     // MODIFICADO: Verificar si el script ya está cargado
@@ -583,44 +713,97 @@ function cargarScriptModulo(modulo) {
     if (scriptExistente) {
         console.log(`Script de ${modulo} ya cargado, reintentando inicialización...`);
         const fnName = `init${modulo.charAt(0).toUpperCase() + modulo.slice(1)}Page`;
-        if (typeof window[fnName] === 'function') {
-            window[fnName]();
-        } else {
-            console.warn(`Función ${fnName} no encontrada después de cargar el script`);
+        
+        // Si tenemos función de inicialización y se solicitó inicialización automática
+        if (typeof window[fnName] === 'function' && autoInit) {
+            try {
+                window[fnName]();
+                return true;
+            } catch (e) {
+                console.error(`Error ejecutando ${fnName}:`, e);
+            }
         }
-        return;
+        
+        // Si llegamos aquí, necesitamos recargar el script
+        console.warn(`Eliminando y recargando script de ${modulo}...`);
+        scriptExistente.parentNode.removeChild(scriptExistente);
     }
     
-    const script = document.createElement('script');
-    script.src = `/js/${modulo}.js`;
-    script.onload = function() {
-        console.log(`Script de ${modulo} cargado correctamente`);
-        const fnName = `init${modulo.charAt(0).toUpperCase() + modulo.slice(1)}Page`;
-        if (typeof window[fnName] === 'function') {
-            window[fnName]();
-        } else {
-            console.warn(`Función ${fnName} no encontrada después de cargar el script`);
-        }
-    };
-    script.onerror = function() {
-        console.error(`Error al cargar el script de ${modulo}`);
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `/js/${modulo}.js?t=${Date.now()}`; // Agregar timestamp para evitar caché
         
-        // NUEVO: En caso de error, buscar una alternativa o mostrar mensaje
-        const mainContainer = document.getElementById(modulo);
-        if (mainContainer) {
-            const errorMsg = document.createElement('div');
-            errorMsg.className = 'alert alert-danger mt-3';
-            errorMsg.innerHTML = `
-                <h5><i class="fas fa-exclamation-triangle me-2"></i>Error al cargar el módulo</h5>
-                <p>No se pudo inicializar el módulo de ${modulo}.</p>
-                <button class="btn btn-primary btn-sm" onclick="location.reload()">
-                    <i class="fas fa-sync"></i> Reintentar
-                </button>
-            `;
-            mainContainer.prepend(errorMsg);
+        script.onload = function() {
+            console.log(`Script de ${modulo} cargado correctamente`);
+            const fnName = `init${modulo.charAt(0).toUpperCase() + modulo.slice(1)}Page`;
+            
+            if (typeof window[fnName] === 'function' && autoInit) {
+                try {
+                    window[fnName]();
+                    resolve(true);
+                } catch (e) {
+                    console.error(`Error ejecutando ${fnName}:`, e);
+                    reject(e);
+                }
+            } else {
+                resolve(false);
+            }
+        };
+        
+        script.onerror = function(error) {
+            console.error(`Error al cargar el script de ${modulo}:`, error);
+            
+            // MEJORADO: En caso de error, buscar una alternativa o mostrar mensaje
+            const mainContainer = document.getElementById(modulo);
+            if (mainContainer) {
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'alert alert-danger mt-3';
+                errorMsg.innerHTML = `
+                    <h5><i class="fas fa-exclamation-triangle me-2"></i>Error al cargar el módulo</h5>
+                    <p>No se pudo inicializar el módulo de ${modulo}.</p>
+                    <button class="btn btn-primary btn-sm" onclick="loadPage('${modulo}')">
+                        <i class="fas fa-sync"></i> Reintentar
+                    </button>
+                `;
+                mainContainer.prepend(errorMsg);
+            }
+            
+            reject(error);
+        };
+        
+        document.head.appendChild(script);
+    });
+}
+
+function checkApplicationStatus() {
+    console.log('Verificando estado global de la aplicación...');
+    
+    // Verificar página actual
+    const currentPage = appState.currentPage || 'dashboard';
+    
+    // Verificar si la página actual está mostrando correctamente
+    const pageElement = document.getElementById(currentPage);
+    if (!pageElement || !pageElement.classList.contains('active')) {
+        console.warn(`⚠️ Posible problema: La página ${currentPage} no está activa`);
+        // Intentar corregir
+        loadPage(currentPage);
+        return; // Salir para dar tiempo a la corrección
+    }
+    
+    // Verificaciones específicas según la página
+    if (currentPage === 'clientes') {
+        const tbody = document.querySelector('#tablaClientes tbody');
+        if (tbody && tbody.innerHTML.includes('Cargando clientes')) {
+            const duracionCarga = Date.now() - window.ultimaCargaClientes;
+            if (duracionCarga > 10000) { // Más de 10 segundos cargando
+                console.warn('⚠️ Detección: Clientes en estado de carga por más de 10 segundos');
+                // Forzar recarga
+                if (typeof window.cargarClientes === 'function') {
+                    window.cargarClientes(true);
+                }
+            }
         }
-    };
-    document.head.appendChild(script);
+    }
 }
 
 // Implementación fallback para el módulo de clientes y otras funciones de soporte...
