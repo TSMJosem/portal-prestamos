@@ -480,55 +480,198 @@ function cargarPreferenciasUsuario(tablaId) {
 
 // Buscar tablas que necesitan paginación
 function buscarTablasParaPaginar() {
+    console.log('🔍 Buscando tablas para paginar...');
+    
+    // Verificar en qué página estamos actualmente
+    let paginaActual = window.currentPage || 'dashboard';
+    
+    // También intentar detectar la página activa por DOM
+    const paginaActivaElement = document.querySelector('.page-content.active');
+    if (paginaActivaElement && paginaActivaElement.id) {
+        paginaActual = paginaActivaElement.id;
+    }
+    
+    console.log(`Página actual detectada: ${paginaActual}`);
+    
     // Paginación automática para tablas conocidas
     PAGINADOR_CONFIG.tablasAutomaticas.forEach(selector => {
-        const tablaElement = document.querySelector(selector);
-        if (tablaElement && tablaElement.id) {
-            // Solo inicializar si no existe paginación para esta tabla
-            if (!tablasPaginadas[tablaElement.id]) {
-                console.log(`Aplicando paginación automática a tabla: ${tablaElement.id}`);
-                inicializarPaginacion(tablaElement.id);
+        // Buscar tanto de forma global como dentro de la página actual
+        let tablas = [];
+        
+        // Intentar primero en el contenedor de la página actual
+        const paginaActivaElement = document.getElementById(paginaActual);
+        if (paginaActivaElement) {
+            const tablasEnPagina = paginaActivaElement.querySelectorAll(selector);
+            if (tablasEnPagina.length > 0) {
+                tablas = [...tablasEnPagina];
             }
         }
+        
+        // Si no se encontraron en la página actual, buscar globalmente
+        if (tablas.length === 0) {
+            const tablasGlobales = document.querySelectorAll(selector);
+            if (tablasGlobales.length > 0) {
+                tablas = [...tablasGlobales];
+            }
+        }
+        
+        // Procesar tablas encontradas
+        if (tablas.length > 0) {
+            console.log(`Encontradas ${tablas.length} tablas con selector: ${selector}`);
+            
+            tablas.forEach(tabla => {
+                // Verificar si la tabla tiene ID
+                if (!tabla.id) {
+                    const idGenerado = `tabla-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                    console.log(`Tabla sin ID detectada, asignando ID: ${idGenerado}`);
+                    tabla.id = idGenerado;
+                }
+                
+                // Solo inicializar si no existe paginación para esta tabla
+                if (!tablasPaginadas[tabla.id]) {
+                    console.log(`✅ Inicializando paginación para tabla: ${tabla.id}`);
+                    inicializarPaginacion(tabla.id);
+                } else {
+                    console.log(`Actualizando paginación existente para tabla: ${tabla.id}`);
+                    actualizarPaginacion(tabla.id);
+                }
+            });
+        } else {
+            console.log(`No se encontraron tablas con selector: ${selector}`);
+        }
     });
+    
+    // Buscar también cualquier tabla con clase table-paginate
+    const tablasConClase = document.querySelectorAll('.table-paginate');
+    if (tablasConClase.length > 0) {
+        console.log(`Encontradas ${tablasConClase.length} tablas con clase table-paginate`);
+        
+        tablasConClase.forEach(tabla => {
+            if (!tabla.id) {
+                const idGenerado = `tabla-paginate-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                tabla.id = idGenerado;
+            }
+            
+            if (!tablasPaginadas[tabla.id]) {
+                inicializarPaginacion(tabla.id);
+            } else {
+                actualizarPaginacion(tabla.id);
+            }
+        });
+    }
+    
+    // Verificar que las tablas paginadas siguen en el DOM
+    // y eliminar paginación para las que ya no están
+    for (const tablaId in tablasPaginadas) {
+        if (!document.getElementById(tablaId)) {
+            console.log(`Eliminando paginación para tabla inexistente: ${tablaId}`);
+            
+            // Eliminar elementos de la paginación
+            const paginador = document.getElementById(`paginador-${tablaId}`);
+            if (paginador) paginador.remove();
+            
+            // Eliminar de la lista de tablas paginadas
+            delete tablasPaginadas[tablaId];
+        }
+    }
 }
 
 // Observer para detectar cambios en el DOM
 function iniciarObservadorDOM() {
+    console.log('🔄 Iniciando observador mejorado para tablas paginadas');
+    
+    // Listener para eventos de navegación
+    document.addEventListener('click', function(event) {
+        // Detectar clics en enlaces de navegación
+        if (event.target.hasAttribute('data-page') || 
+            event.target.closest('[data-page]')) {
+            
+            // Obtener la página destino
+            const pageTarget = event.target.getAttribute('data-page') || 
+                               event.target.closest('[data-page]').getAttribute('data-page');
+            
+            console.log(`Detectada navegación hacia: ${pageTarget}`);
+            
+            // Programar búsqueda de tablas en la nueva página
+            setTimeout(() => {
+                console.log(`Buscando tablas después de navegación a: ${pageTarget}`);
+                buscarTablasParaPaginar();
+                
+                // Segundo intento por si acaso
+                setTimeout(buscarTablasParaPaginar, 800);
+            }, 500);
+        }
+    });
+    
     // Crear un observer para vigilar cambios en el contenido
     const observer = new MutationObserver(function(mutations) {
         let actualizarTablas = false;
+        let nuevaTablaDetectada = false;
         
         mutations.forEach(function(mutation) {
-            // Si se añaden nodos o cambian atributos
-            if (mutation.type === 'childList' || mutation.type === 'attributes') {
-                actualizarTablas = true;
+            // Si se añaden nodos
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                // Revisar si alguno de los nodos añadidos es una tabla o contiene tablas
+                for (let i = 0; i < mutation.addedNodes.length; i++) {
+                    const node = mutation.addedNodes[i];
+                    
+                    // Solo procesar elementos DOM
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    
+                    // Verificar si es una tabla o contiene tablas
+                    if (node.tagName === 'TABLE' || node.querySelector('table')) {
+                        nuevaTablaDetectada = true;
+                        break;
+                    }
+                    
+                    // También buscar filas nuevas que puedan afectar tablas existentes
+                    if (node.tagName === 'TR' || node.tagName === 'TBODY') {
+                        actualizarTablas = true;
+                    }
+                }
             }
             
             // Si cambia la clase de algún elemento, podría indicar cambio de página
             if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                const targetId = mutation.target.id;
-                if (targetId && document.getElementById(targetId).classList.contains('active')) {
-                    // Buscar tablas en la nueva página activa
-                    setTimeout(buscarTablasParaPaginar, 500);
+                const target = mutation.target;
+                
+                // Verificar si es una página que está siendo activada
+                if (target.classList.contains('page-content') || 
+                    target.classList.contains('active')) {
+                    
+                    console.log('Detectado cambio de página, reiniciando búsqueda de tablas...');
+                    
+                    // Programar búsqueda de tablas en la nueva página
+                    setTimeout(buscarTablasParaPaginar, 400);
                 }
                 
-                // Ver si alguna tabla ha cambiado
+                // Verificar si es una tabla que cambió
+                if (target.tagName === 'TABLE' || target.querySelector('table')) {
+                    actualizarTablas = true;
+                }
+                
+                // Verificar si alguna tabla ya paginada ha cambiado
                 for (const tablaId in tablasPaginadas) {
                     if (mutation.target === tablasPaginadas[tablaId].elemento || 
                         mutation.target === tablasPaginadas[tablaId].tbody) {
+                        
+                        console.log(`Tabla paginada modificada: ${tablaId}, actualizando...`);
                         actualizarPaginacion(tablaId);
                     }
                 }
             }
         });
         
-        // Si hubo cambios que podrían afectar las tablas
-        if (actualizarTablas) {
-            // Buscar nuevas tablas para paginar
-            setTimeout(buscarTablasParaPaginar, 500);
+        // Si se detectó una nueva tabla, buscar tablas para paginar
+        if (nuevaTablaDetectada) {
+            console.log('Nueva tabla detectada, inicializando paginación...');
+            setTimeout(buscarTablasParaPaginar, 200);
+        } 
+        // Si solo hubo cambios en tablas existentes, actualizar la paginación
+        else if (actualizarTablas) {
+            console.log('Cambios detectados en tablas, actualizando paginación...');
             
-            // Actualizar paginación existente
+            // Actualizar todas las tablas paginadas
             for (const tablaId in tablasPaginadas) {
                 setTimeout(() => actualizarPaginacion(tablaId), 200);
             }
@@ -540,10 +683,8 @@ function iniciarObservadorDOM() {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['class']
+        attributeFilter: ['class', 'style', 'display']
     });
-    
-    console.log('Observer iniciado para tablas paginadas');
 }
 
 // Estilo CSS para los controles de paginación
@@ -605,8 +746,72 @@ function agregarEstilos() {
     document.head.appendChild(estilos);
 }
 
-// Añadir estilos CSS al cargar
-document.addEventListener('DOMContentLoaded', agregarEstilos);
+// Función para realizar inicialización con reintento
+function inicializarConReintento(maxIntentos = 3) {
+    let intento = 1;
+    
+    function intentarInicializacion() {
+        console.log(`Intento ${intento}/${maxIntentos} de inicialización de paginación...`);
+        
+        // Buscar tablas para paginar
+        buscarTablasParaPaginar();
+        
+        // Si hay tablas paginadas, considerar exitoso
+        const hayTablasPaginadas = Object.keys(tablasPaginadas).length > 0;
+        
+        if (!hayTablasPaginadas && intento < maxIntentos) {
+            // Incrementar intento y programar siguiente intento
+            intento++;
+            setTimeout(intentarInicializacion, intento * 500); // Retraso incremental
+        } else if (hayTablasPaginadas) {
+            console.log(`✅ Paginación inicializada exitosamente en el intento ${intento}`);
+        } else {
+            console.log(`⚠️ No se pudieron encontrar tablas para paginar después de ${maxIntentos} intentos`);
+        }
+    }
+    
+    // Iniciar el primer intento
+    intentarInicializacion();
+}
+
+// Inicializar paginación cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔢 Inicializando sistema de paginación para tablas...');
+    
+    // Añadir estilos
+    agregarEstilos();
+    
+    // Iniciar observador DOM
+    iniciarObservadorDOM();
+    
+    // Inicializar con sistema de reintento
+    setTimeout(() => {
+        inicializarConReintento(4);
+    }, 800);
+    
+    // También programar una verificación para cuando la página esté completamente cargada
+    window.addEventListener('load', function() {
+        setTimeout(buscarTablasParaPaginar, 1000);
+    });
+    
+    // Escuchar cambios en currentPage (variable global)
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'currentPage');
+    if (descriptor && descriptor.configurable) {
+        let valorActual = window.currentPage;
+        
+        Object.defineProperty(window, 'currentPage', {
+            get: function() { return valorActual; },
+            set: function(nuevoValor) {
+                const valorAnterior = valorActual;
+                valorActual = nuevoValor;
+                
+                console.log(`🔄 Variable currentPage cambiada: ${valorAnterior} → ${nuevoValor}`);
+                setTimeout(buscarTablasParaPaginar, 600);
+            },
+            configurable: true
+        });
+    }
+});
 
 // Exponer funciones al ámbito global
 window.tablePaginator = {
