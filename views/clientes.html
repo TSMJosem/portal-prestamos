@@ -1,10 +1,15 @@
-<!-- Plantilla para la página de clientes -->
+<!-- Plantilla optimizada para la página de clientes -->
 <div class="container-fluid">
     <h2 class="mb-4">Gestión de Clientes</h2>
     
     <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">Listado de Clientes</h6>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">Listado de Clientes</h6>
+                <button id="btnRefreshClientes" class="btn btn-sm btn-outline-primary ms-3" title="Actualizar lista">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
             <div class="input-group w-50">
                 <input type="text" class="form-control" placeholder="Buscar cliente..." id="buscarCliente">
                 <button class="btn btn-primary" type="button" id="btnNuevoCliente">
@@ -27,7 +32,12 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td colspan="6" class="text-center">Cargando clientes...</td>
+                            <td colspan="6" class="text-center">
+                                <div class="d-flex justify-content-center align-items-center my-4">
+                                    <div class="spinner-border text-primary me-3"></div>
+                                    <span>Cargando clientes...</span>
+                                </div>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -85,98 +95,90 @@
         </div>
     </div>
 </div>
-    
-    <!-- Modal para Editar Cliente -->
-    <div class="modal fade" id="modalEditarCliente" tabindex="-1" aria-labelledby="modalEditarClienteLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalEditarClienteLabel">Editar Cliente</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="formEditarCliente">
-                        <input type="hidden" name="clienteId">
-                        <div class="mb-3">
-                            <label for="nombreCompletoEdit" class="form-label">Nombre Completo</label>
-                            <input type="text" class="form-control" id="nombreCompletoEdit" name="nombreCompleto" required>
-                        </div>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="tipoDocumentoEdit" class="form-label">Tipo de Documento</label>
-                                <select class="form-select" id="tipoDocumentoEdit" name="tipoDocumento" required>
-                                    <option value="">Seleccione...</option>
-                                    <option value="INE">INE</option>
-                                    <option value="CURP">CURP</option>
-                                    <option value="Pasaporte">Pasaporte</option>
-                                    <option value="Otro">Otro</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="numeroDocumentoEdit" class="form-label">Número de Documento</label>
-                                <input type="text" class="form-control" id="numeroDocumentoEdit" name="numeroDocumento" required>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="telefonoEdit" class="form-label">Teléfono</label>
-                            <input type="tel" class="form-control" id="telefonoEdit" name="telefono" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="correoElectronicoEdit" class="form-label">Correo Electrónico</label>
-                            <input type="email" class="form-control" id="correoElectronicoEdit" name="correoElectronico">
-                        </div>
-                        <div class="mb-3">
-                            <label for="estadoEdit" class="form-label">Estado</label>
-                            <select class="form-select" id="estadoEdit" name="estado" required>
-                                <option value="Activo">Activo</option>
-                                <option value="Inactivo">Inactivo</option>
-                            </select>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" form="formEditarCliente">Guardar Cambios</button>
-                </div>
+
+<!-- Modal para Editar Cliente -->
+<div class="modal fade" id="modalEditarCliente" tabindex="-1" aria-labelledby="modalEditarClienteLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarClienteLabel">Editar Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarCliente">
+                    <input type="hidden" id="editClienteId" name="clienteId">
+                    <div class="mb-3">
+                        <label for="editNombreCompleto" class="form-label">Nombre Completo</label>
+                        <input type="text" class="form-control" id="editNombreCompleto" name="nombreCompleto" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTipoDocumento" class="form-label">Tipo de Documento</label>
+                        <select class="form-select" id="editTipoDocumento" name="tipoDocumento" required>
+                            <option value="INE">INE</option>
+                            <option value="CURP">CURP</option>
+                            <option value="Pasaporte">Pasaporte</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editNumeroDocumento" class="form-label">Número de Documento</label>
+                        <input type="text" class="form-control" id="editNumeroDocumento" name="numeroDocumento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTelefono" class="form-label">Teléfono</label>
+                        <input type="tel" class="form-control" id="editTelefono" name="telefono" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCorreoElectronico" class="form-label">Correo Electrónico</label>
+                        <input type="email" class="form-control" id="editCorreoElectronico" name="correoElectronico">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editEstado" class="form-label">Estado</label>
+                        <select class="form-select" id="editEstado" name="estado" required>
+                            <option value="Activo">Activo</option>
+                            <option value="Inactivo">Inactivo</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarEdicionCliente">Guardar Cambios</button>
             </div>
         </div>
     </div>
-    
-    <!-- Modal para Detalles de Cliente -->
-    <div class="modal fade" id="modalDetallesCliente" tabindex="-1" aria-labelledby="modalDetallesClienteLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalDetallesClienteLabel">Detalles del Cliente</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card mb-4">
-                                <div class="card-header">
-                                    <h6 class="m-0 font-weight-bold text-primary">Información Personal</h6>
-                                </div>
-                                <div class="card-body detalles-cliente">
-                                    <!-- Se llenará dinámicamente -->
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card mb-4">
-                                <div class="card-header">
-                                    <h6 class="m-0 font-weight-bold text-primary">Préstamos</h6>
-                                </div>
-                                <div class="card-body prestamos-cliente">
-                                    <!-- Se llenará dinámicamente -->
-                                </div>
-                            </div>
-                        </div>
+</div>
+
+<!-- Modal para Préstamos del Cliente -->
+<div class="modal fade" id="modalPrestamosCliente" tabindex="-1" aria-labelledby="modalPrestamosClienteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalPrestamosClienteLabel">Préstamos del Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-4">
+                    <div class="col-md-6" id="infoCliente">
+                        <!-- Información del cliente -->
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-primary" id="btnNuevoPrestamoCliente">
+                            <i class="fas fa-plus"></i> Nuevo Préstamo
+                        </button>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <div id="prestamosClienteContenedor">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p>Cargando préstamos...</p>
+                    </div>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>

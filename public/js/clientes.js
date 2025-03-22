@@ -11,63 +11,24 @@ window.clientesModuloInicializado = false;
 // NUEVO: Variable global para la última carga
 window.ultimaCargaClientes = 0;
 
-let peticionClientesActiva = false;
-
-function guardarClientesEnCache(clientesData) {
-    if (Array.isArray(clientesData) && clientesData.length > 0) {
-        try {
-            localStorage.setItem('clientesCache', JSON.stringify(clientesData));
-            localStorage.setItem('clientesCacheTimestamp', Date.now().toString());
-            console.log(`Guardados ${clientesData.length} clientes en caché local`);
-        } catch (error) {
-            console.error('Error al guardar clientes en caché:', error);
-        }
-    }
-}
-
-function obtenerClientesDeCache() {
-    try {
-        const cacheTimestamp = localStorage.getItem('clientesCacheTimestamp');
-        // Solo usar caché si tiene menos de 5 minutos
-        if (cacheTimestamp && (Date.now() - parseInt(cacheTimestamp)) < 300000) {
-            const clientesData = JSON.parse(localStorage.getItem('clientesCache')) || [];
-            console.log(`Recuperados ${clientesData.length} clientes de caché (${Math.round((Date.now() - parseInt(cacheTimestamp))/1000)}s)`);
-            return clientesData;
-        }
-    } catch (e) {
-        console.error('Error al recuperar caché:', e);
-    }
-    return null;
-}
-
 // Función principal de inicialización - DEBE SER GLOBAL
 function initClientesPage() {
     console.log('Inicializando página de clientes...');
     
-    // MEJORADO: Evitar doble inicialización en la misma sesión
+    // NUEVO: Evitar doble inicialización en la misma sesión
     if (window.clientesModuloInicializado) {
         console.log('El módulo de clientes ya fue inicializado, verificando estado...');
         // Verificar si hay datos cargados, si no, recargar
         const tbody = document.querySelector('#tablaClientes tbody');
         if (tbody && tbody.textContent.includes('Cargando clientes')) {
             console.log('Detectados datos en carga, reiniciando...');
-            cargarClientes(true);
+            cargarClientes();
         } else if (Array.isArray(clientes) && clientes.length > 0) {
             console.log('Datos ya cargados, actualizando tabla...');
             actualizarTablaClientes();
         } else {
-            // NUEVO: Intentar usar caché primero
-            const clientesCache = obtenerClientesDeCache();
-            if (clientesCache) {
-                clientes = clientesCache;
-                window.clientes = clientesCache;
-                actualizarTablaClientes();
-                // Recargar en segundo plano
-                setTimeout(() => cargarClientes(true), 1000);
-            } else {
-                console.log('No hay datos cargados ni en caché, iniciando carga...');
-                cargarClientes();
-            }
+            console.log('No hay datos cargados, iniciando carga...');
+            cargarClientes();
         }
         return;
     }
@@ -79,7 +40,7 @@ function initClientesPage() {
     if (!paginaClientes) {
         console.error('Contenedor #clientes no encontrado');
         
-        // MEJORADO: Intento de recuperación
+        // NUEVO: Intento de recuperación
         const contenidoAlternativo = document.querySelector('.page-content.active, #main-content, #pageContent');
         if (contenidoAlternativo) {
             console.warn('Usando contenedor alternativo:', contenidoAlternativo.id || 'contenedor sin ID');
@@ -92,18 +53,7 @@ function initClientesPage() {
             // Continuar con el contenedor creado
             verificarYCrearElementosNecesarios(nuevoContenedor);
             configurarEventos();
-            
-            // NUEVO: Intentar usar caché primero
-            const clientesCache = obtenerClientesDeCache();
-            if (clientesCache) {
-                clientes = clientesCache;
-                window.clientes = clientesCache;
-                actualizarTablaClientes();
-                // Recargar en segundo plano
-                setTimeout(() => cargarClientes(true), 1000);
-            } else {
-                cargarClientes();
-            }
+            cargarClientes();
         } else {
             showNotification('Error al inicializar el módulo de clientes', 'error');
         }
@@ -116,41 +66,8 @@ function initClientesPage() {
     // Configurar eventos
     configurarEventos();
     
-    const clientesCache = obtenerClientesDeCache();
-    if (clientesCache) {
-        clientes = clientesCache;
-        window.clientes = clientesCache;
-        actualizarTablaClientes();
-        // Recargar en segundo plano para actualizar
-        setTimeout(() => cargarClientes(true), 1000);
-    } else {
-        // Cargar datos de clientes
-        cargarClientes();
-    }
-    
-    // NUEVO: Iniciar detector de problemas
-    iniciarDetectorProblemas();
-}
-
-function iniciarDetectorProblemas() {
-    // Evitar iniciar múltiples detectores
-    if (window.detectorClientesActivo) return;
-    
-    window.detectorClientesActivo = setInterval(() => {
-        if (window.currentPage !== 'clientes') return;
-        
-        const tbody = document.querySelector('#tablaClientes tbody');
-        if (tbody && tbody.textContent.includes('Cargando clientes')) {
-            const tiempoEspera = Date.now() - window.ultimaCargaClientes;
-            // Si está cargando por más de 8 segundos, intentar recuperación
-            if (tiempoEspera > 8000) {
-                console.warn('Detectada carga prolongada, intentando recuperación automática...');
-                cargarClientes(true);
-            }
-        }
-    }, 5000); // Verificar cada 5 segundos
-    
-    console.log('Detector de problemas de clientes iniciado');
+    // Cargar datos de clientes
+    cargarClientes();
 }
 
 // Verificar y crear elementos necesarios
@@ -168,80 +85,60 @@ function verificarYCrearElementosNecesarios(paginaClientes) {
    // Verificar si existe la tarjeta principal
    let card = contenedor.querySelector('.card');
    if (!card) {
-    console.log('Creando tarjeta principal para clientes...');
-    card = document.createElement('div');
-    card.className = 'card shadow mb-4';
-    card.innerHTML = `
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center">
-                <h6 class="m-0 font-weight-bold text-primary">Listado de Clientes</h6>
-                <button id="btnRefreshClientes" class="btn btn-sm btn-outline-primary ms-3" title="Actualizar lista">
-                    <i class="fas fa-sync-alt"></i> Actualizar
-                </button>
-                
-                <!-- NUEVO: Botón de emergencia para forzar recarga -->
-                <button id="btnEmergenciaRecargar" class="btn btn-sm btn-outline-warning ms-2" title="Forzar recarga total">
-                    <i class="fas fa-bolt"></i> Forzar Recarga
-                </button>
-            </div>
-            <div class="input-group w-50">
-                <input type="text" class="form-control" placeholder="Buscar cliente..." id="buscarCliente">
-                <button class="btn btn-primary" type="button" id="btnNuevoCliente">
-                    <i class="fas fa-plus"></i> Nuevo Cliente
-                </button>
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="tablaClientes" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>Nombre</th>
-                            <th>Documento</th>
-                            <th>Teléfono</th>
-                            <th>Correo</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6" class="text-center">Cargando clientes...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="mt-3">
-                <p class="text-muted">Total de clientes: <span id="totalClientes">0</span></p>
-                <span id="contadorClientes" style="display:none">0</span>
-            </div>
-        </div>
-    `;
-    contenedor.appendChild(card);
-}
+       console.log('Creando tarjeta principal para clientes...');
+       card = document.createElement('div');
+       card.className = 'card shadow mb-4';
+       card.innerHTML = `
+           <div class="card-header d-flex justify-content-between align-items-center">
+               <div class="d-flex align-items-center">
+                   <h6 class="m-0 font-weight-bold text-primary">Listado de Clientes</h6>
+                   <button id="btnRefreshClientes" class="btn btn-sm btn-outline-primary ms-3" title="Actualizar lista">
+                       <i class="fas fa-sync-alt"></i> Actualizar
+                   </button>
+               </div>
+               <div class="input-group w-50">
+                   <input type="text" class="form-control" placeholder="Buscar cliente..." id="buscarCliente">
+                   <button class="btn btn-primary" type="button" id="btnNuevoCliente">
+                       <i class="fas fa-plus"></i> Nuevo Cliente
+                   </button>
+               </div>
+           </div>
+           <div class="card-body">
+               <div class="table-responsive">
+                   <table class="table table-bordered" id="tablaClientes" width="100%" cellspacing="0">
+                       <thead>
+                           <tr>
+                               <th>Nombre</th>
+                               <th>Documento</th>
+                               <th>Teléfono</th>
+                               <th>Correo</th>
+                               <th>Estado</th>
+                               <th>Acciones</th>
+                           </tr>
+                       </thead>
+                       <tbody>
+                           <tr>
+                               <td colspan="6" class="text-center">Cargando clientes...</td>
+                           </tr>
+                       </tbody>
+                   </table>
+               </div>
+               <div class="mt-3">
+                   <p class="text-muted">Total de clientes: <span id="totalClientes">0</span></p>
+                   <span id="contadorClientes" style="display:none">0</span>
+               </div>
+           </div>
+       `;
+       contenedor.appendChild(card);
+   }
    
    // Verificar existencia de tabla clientes
-   const btnEmergencia = card.querySelector('#btnEmergenciaRecargar');
-
-   if (!btnEmergencia) {
-    const headerActions = card.querySelector('.card-header .d-flex.align-items-center');
-    if (headerActions) {
-        const nuevoBoton = document.createElement('button');
-        nuevoBoton.id = 'btnEmergenciaRecargar';
-        nuevoBoton.className = 'btn btn-sm btn-outline-warning ms-2';
-        nuevoBoton.title = 'Forzar recarga total';
-        nuevoBoton.innerHTML = '<i class="fas fa-bolt"></i> Forzar Recarga';
-        headerActions.appendChild(nuevoBoton);
-    }
-}
-
-// Verificar existencia de tabla clientes
-const tabla = paginaClientes.querySelector('#tablaClientes');
-if (!tabla) {
-    console.error('Tabla de clientes no encontrada después de intentar crearla');
-} else {
-    console.log('Tabla de clientes encontrada');
-}
+   const tabla = paginaClientes.querySelector('#tablaClientes');
+   if (!tabla) {
+       console.error('Tabla de clientes no encontrada después de intentar crearla');
+   } else {
+       console.log('Tabla de clientes encontrada');
+   }
    
    // Asegurar que exista el contador de clientes
    const totalClientes = paginaClientes.querySelector('#totalClientes');
@@ -325,83 +222,58 @@ if (!tabla) {
    }
 }
 
-// MEJORADO: Configuración de eventos para evitar duplicación
+// Configuración de eventos
 function configurarEventos() {
-    console.log('Configurando eventos para clientes...');
-    
-    // MEJORADO: Botón nuevo cliente - Clonar y reemplazar para evitar duplicación de eventos
-    const btnNuevoCliente = document.getElementById('btnNuevoCliente');
-    if (btnNuevoCliente) {
-        const nuevoClone = btnNuevoCliente.cloneNode(true);
-        btnNuevoCliente.parentNode.replaceChild(nuevoClone, btnNuevoCliente);
-        nuevoClone.addEventListener('click', abrirModalNuevoCliente);
-    }
-    
-    // MEJORADO: Botón de actualizar - Clonar y reemplazar
-    const btnRefreshClientes = document.getElementById('btnRefreshClientes');
-    if (btnRefreshClientes) {
-        const refreshClone = btnRefreshClientes.cloneNode(true);
-        btnRefreshClientes.parentNode.replaceChild(refreshClone, btnRefreshClientes);
-        refreshClone.addEventListener('click', refrescarListaClientes);
-    }
-    
-    // NUEVO: Botón de emergencia - Clonar y reemplazar
-    const btnEmergencia = document.getElementById('btnEmergenciaRecargar');
-    if (btnEmergencia) {
-        const emergenciaClone = btnEmergencia.cloneNode(true);
-        btnEmergencia.parentNode.replaceChild(emergenciaClone, btnEmergencia);
-        emergenciaClone.addEventListener('click', function() {
-            // Forzar recarga completa
-            window.clientesModuloInicializado = false;
-            localStorage.removeItem('clientesCache');
-            localStorage.removeItem('clientesCacheTimestamp');
-            cargarClientes(true);
-        });
-    }
-    
-    // MEJORADO: Botón guardar nuevo cliente - Clonar y reemplazar
-    const btnGuardarNuevoCliente = document.getElementById('btnGuardarNuevoCliente');
-    if (btnGuardarNuevoCliente) {
-        const guardarClone = btnGuardarNuevoCliente.cloneNode(true);
-        btnGuardarNuevoCliente.parentNode.replaceChild(guardarClone, btnGuardarNuevoCliente);
-        guardarClone.addEventListener('click', guardarNuevoCliente);
-    }
-    
-    // MEJORADO: Formulario nuevo cliente (para envío con Enter) - Reconfigurar
-    const formNuevoCliente = document.getElementById('formNuevoCliente');
-    if (formNuevoCliente) {
-        // Remover todos los event listeners existentes
-        const formClone = formNuevoCliente.cloneNode(true);
-        formNuevoCliente.parentNode.replaceChild(formClone, formNuevoCliente);
-        formClone.addEventListener('submit', manejarSubmitFormulario);
-    }
-    
-    // MEJORADO: Campo de búsqueda - Clonar y reemplazar
-    const buscarCliente = document.getElementById('buscarCliente');
-    if (buscarCliente) {
-        const buscarClone = buscarCliente.cloneNode(true);
-        buscarCliente.parentNode.replaceChild(buscarClone, buscarCliente);
-        buscarClone.addEventListener('keyup', filtrarClientes);
-    }
-    
-    // NUEVO: Verificar si hay un cliente pendiente por mostrar
-    setTimeout(() => {
-        if (window.pendingClientDetails) {
-            const clienteId = window.pendingClientDetails;
-            window.pendingClientDetails = null; // Limpiar para evitar reutilización
-            verPrestamosCliente(clienteId);
-        }
-    }, 1000);
- }
+   console.log('Configurando eventos para clientes...');
+   
+   // Botón nuevo cliente
+   const btnNuevoCliente = document.getElementById('btnNuevoCliente');
+   if (btnNuevoCliente) {
+       // MODIFICADO: Eliminar eventos anteriores para evitar duplicación
+       btnNuevoCliente.removeEventListener('click', abrirModalNuevoCliente);
+       btnNuevoCliente.addEventListener('click', abrirModalNuevoCliente);
+   }
+   
+   // NUEVO: Botón de actualizar
+   const btnRefreshClientes = document.getElementById('btnRefreshClientes');
+   if (btnRefreshClientes) {
+       btnRefreshClientes.removeEventListener('click', refrescarListaClientes);
+       btnRefreshClientes.addEventListener('click', refrescarListaClientes);
+   }
+   
+   // Botón guardar nuevo cliente
+   const btnGuardarNuevoCliente = document.getElementById('btnGuardarNuevoCliente');
+   if (btnGuardarNuevoCliente) {
+       btnGuardarNuevoCliente.removeEventListener('click', guardarNuevoCliente);
+       btnGuardarNuevoCliente.addEventListener('click', guardarNuevoCliente);
+   }
+   
+   // Formulario nuevo cliente (para envío con Enter)
+   const formNuevoCliente = document.getElementById('formNuevoCliente');
+   if (formNuevoCliente) {
+       formNuevoCliente.removeEventListener('submit', manejarSubmitFormulario);
+       formNuevoCliente.addEventListener('submit', manejarSubmitFormulario);
+   }
+   
+   // Campo de búsqueda
+   const buscarCliente = document.getElementById('buscarCliente');
+   if (buscarCliente) {
+       buscarCliente.removeEventListener('keyup', filtrarClientes);
+       buscarCliente.addEventListener('keyup', filtrarClientes);
+   }
+   
+   // NUEVO: Verificar si hay un cliente pendiente por mostrar
+   setTimeout(() => {
+       if (window.pendingClientDetails) {
+           const clienteId = window.pendingClientDetails;
+           window.pendingClientDetails = null; // Limpiar para evitar reutilización
+           verPrestamosCliente(clienteId);
+       }
+   }, 1000);
+}
 
 // NUEVO: Función para abrir modal de nuevo cliente
 function abrirModalNuevoCliente() {
-    // Limpiar formulario para evitar datos residuales
-    const formNuevoCliente = document.getElementById('formNuevoCliente');
-    if (formNuevoCliente) {
-        formNuevoCliente.reset();
-    }
-    
     const modal = new bootstrap.Modal(document.getElementById('modalNuevoCliente'));
     modal.show();
 }
@@ -414,15 +286,8 @@ function manejarSubmitFormulario(event) {
 
 // NUEVO: Función para filtrar clientes
 function filtrarClientes() {
-    const terminoBusqueda = this.value ? this.value.toLowerCase() : '';
+    const terminoBusqueda = this.value.toLowerCase();
     const filas = document.querySelectorAll('#tablaClientes tbody tr');
-    
-    // Si no hay término de búsqueda y no hay filas o solo hay una con mensaje, intentar refrescar
-    if (!terminoBusqueda && filas.length <= 1 && (!filas[0] || filas[0].cells.length <= 1)) {
-        console.log('Tabla vacía detectada durante filtrado, intentando recargar...');
-        cargarClientes();
-        return;
-    }
     
     filas.forEach(fila => {
         // Ignorar la fila de "cargando" o "no hay clientes"
@@ -465,7 +330,7 @@ function refrescarListaClientes() {
 
 // MODIFICADO: Función mejorada para cargar clientes
 function cargarClientes(forzarRecarga = false) {
-    console.log('⏳ Iniciando carga de clientes - VERSIÓN MEJORADA');
+    console.log('⏳ Iniciando carga avanzada de clientes - VERSIÓN MEJORADA');
     
     // Registrar timestamp de carga
     window.ultimaCargaClientes = Date.now();
@@ -480,7 +345,7 @@ function cargarClientes(forzarRecarga = false) {
     if (!tbody) {
         console.error('🚫 Error crítico: No se encontró el tbody de la tabla de clientes');
         
-        // MEJORADO: Verificar si existe la tabla y crear tbody si es necesario
+        // SOLUCIÓN CRÍTICA: Verificar si existe la tabla y crear tbody si es necesario
         const tabla = document.querySelector('#tablaClientes');
         if (tabla) {
             console.warn('⚠️ Se encontró tabla pero no tbody, creando elemento');
@@ -507,57 +372,31 @@ function cargarClientes(forzarRecarga = false) {
         }
     }
     
-    // NUEVO: Si tenemos clientes en caché y no se está forzando recarga, usarlos
-    if (!forzarRecarga) {
-        // Si tenemos datos en memoria
-        if (Array.isArray(clientes) && clientes.length > 0) {
-            console.log('Usando datos en memoria, hay', clientes.length, 'clientes');
-            actualizarTablaClientes();
-            return;
-        }
-        
-        // Si tenemos datos en caché
-        const clientesCache = obtenerClientesDeCache();
-        if (clientesCache) {
-            console.log('Usando datos de caché local, hay', clientesCache.length, 'clientes');
-            clientes = clientesCache;
-            window.clientes = clientesCache;
-            actualizarTablaClientes();
-            // Actualizar en segundo plano
-            setTimeout(() => iniciarCargaClientes(tbody, true), 1000);
-            return;
-        }
-    }
-    
-    // Si llegamos aquí, necesitamos cargar desde la API
-    iniciarCargaClientes(tbody, forzarRecarga);
-} //Hasta aquí se ha modificado....
-
-function iniciarCargaClientes(tbody, silencioso = false) {
-    // NUEVO: Evitar múltiples peticiones simultáneas
-    if (peticionClientesActiva) {
-        console.log('Ya hay una petición activa, cancelando...');
+    // Si tenemos clientes cargados y no se está forzando recarga, mostrar datos inmediatamente
+    if (!forzarRecarga && Array.isArray(clientes) && clientes.length > 0) {
+        console.log('Usando datos en caché, hay', clientes.length, 'clientes');
+        actualizarTablaClientes();
         return;
     }
     
-    peticionClientesActiva = true;
-    
-    // Mostrar mensaje de carga con estilo mejorado si no es silencioso
-    if (!silencioso) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center">
-                    <div class="d-flex flex-column align-items-center p-4">
-                        <div class="spinner-border text-primary mb-3" role="status">
-                            <span class="visually-hidden">Cargando...</span>
-                        </div>
-                        <p class="mb-0">Cargando clientes...</p>
-                        <small class="text-muted" id="loadingTimer">0s</small>
+    iniciarCargaClientes(tbody);
+}
+
+function iniciarCargaClientes(tbody) {
+    // Mostrar mensaje de carga con estilo mejorado
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="text-center">
+                <div class="d-flex flex-column align-items-center p-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Cargando...</span>
                     </div>
-                </td>
-            </tr>
-        `;
-    }
+                    <p class="mb-0">Cargando clientes...</p>
+                    <small class="text-muted" id="loadingTimer">0s</small>
+                </div>
+            </td>
+        </tr>
+    `;
     
     // Temporizador para el mensaje de carga
     let seconds = 0;
@@ -604,7 +443,7 @@ function iniciarCargaClientes(tbody, silencioso = false) {
     function attemptLoad() {
         console.log(`📡 Intento ${retryCount + 1}/${maxRetries} de cargar clientes...`);
         
-        // MODIFICADO: Añadir parámetro timestamp para evitar caché del navegador
+        // MODIFICADO: Añadir parámetro timestamp para evitar caché
         fetch(`/api/clientes?t=${Date.now()}`)
             .then(response => {
                 console.log(`✅ Respuesta del servidor: ${response.status} ${response.statusText}`);
@@ -630,9 +469,6 @@ function iniciarCargaClientes(tbody, silencioso = false) {
                 console.log('Array de clientes procesado:', clientesArray);
                 
                 stopTimer();
-                
-                // NUEVO: Almacenar en caché local
-                guardarClientesEnCache(clientesArray);
                 
                 // Almacenar como array
                 clientes = clientesArray;
@@ -693,21 +529,19 @@ function iniciarCargaClientes(tbody, silencioso = false) {
                     setTimeout(attemptLoad, delay);
                     
                     // Actualizar mensaje de carga
-                    if (!silencioso) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="6" class="text-center">
-                                    <div class="d-flex flex-column align-items-center p-4">
-                                        <div class="spinner-border text-warning mb-3" role="status">
-                                            <span class="visually-hidden">Reintentando...</span>
-                                        </div>
-                                        <p class="mb-2">Error al cargar clientes</p>
-                                        <p class="small text-muted">Reintentando en ${delay/1000}s (intento ${retryCount + 1}/${maxRetries})...</p>
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center">
+                                <div class="d-flex flex-column align-items-center p-4">
+                                    <div class="spinner-border text-warning mb-3" role="status">
+                                        <span class="visually-hidden">Reintentando...</span>
                                     </div>
-                                </td>
-                            </tr>
-                        `;
-                    }
+                                    <p class="mb-2">Error al cargar clientes</p>
+                                    <p class="small text-muted">Reintentando en ${delay/1000}s (intento ${retryCount + 1}/${maxRetries})...</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
                 } else {
                     // No más intentos, mostrar error final
                     stopTimer();
@@ -715,19 +549,12 @@ function iniciarCargaClientes(tbody, silencioso = false) {
                     console.error('🚫 Todos los intentos de carga fallaron:', error);
                     
                     // Verificar si tenemos datos en caché que podemos mostrar
-                    const clientesCache = obtenerClientesDeCache();
-                    if (clientesCache && clientesCache.length > 0) {
-                        console.log('Usando datos en caché como respaldo después de error');
-                        clientes = clientesCache;
-                        window.clientes = clientesCache;
-                        actualizarTablaClientes();
-                        mostrarNotificacion('Error de conexión. Se están mostrando datos en caché.', 'warning');
-                    } else if (Array.isArray(window.clientes) && window.clientes.length > 0) {
-                        console.log('Usando datos en memoria global como respaldo');
+                    if (Array.isArray(window.clientes) && window.clientes.length > 0) {
+                        console.log('Usando datos en caché como respaldo');
                         clientes = window.clientes;
                         actualizarTablaClientes();
-                        mostrarNotificacion('Error de conexión. Se están mostrando datos en memoria.', 'warning');
-                    } else if (!silencioso) {
+                        mostrarNotificacion('Se están mostrando datos en caché. La conexión al servidor falló.', 'warning');
+                    } else {
                         tbody.innerHTML = `
                             <tr>
                                 <td colspan="6" class="text-center">
@@ -752,144 +579,12 @@ function iniciarCargaClientes(tbody, silencioso = false) {
                         `;
                     }
                 }
-            })
-            .finally(() => {
-                peticionClientesActiva = false; // Liberar el bloqueo de peticiones
             });
     }
     
     // Iniciar el primer intento
     attemptLoad();
 }
-
-function actualizarTablaClientes() {
-    console.log('Actualizando tabla de clientes...');
-    
-    // Asegurarse de que clientes sea un array
-    if (!Array.isArray(clientes)) {
-        console.error('Error: clientes no es un array, intentando convertir...');
-        if (clientes && typeof clientes === 'object') {
-            // Si es un objeto, intentar encontrar un array dentro
-            for (const key in clientes) {
-                if (Array.isArray(clientes[key])) {
-                    console.log(`Encontrado array en clientes.${key}, usando esto...`);
-                    clientes = clientes[key];
-                    window.clientes = clientes;
-                    break;
-                }
-            }
-        }
-        
-        // Si todavía no es un array, crear uno vacío
-        if (!Array.isArray(clientes)) {
-            console.error('No se pudo obtener un array válido, usando array vacío');
-            clientes = [];
-            window.clientes = [];
-        }
-    }
-    
-    // Obtener referencia a tbody
-    let tbody = document.querySelector('#tablaClientes tbody');
-    
-    // Verificar si tbody existe
-    if (!tbody) {
-        console.error('Error: No se encontró el elemento tbody de la tabla de clientes');
-        
-        // Intentar recuperar o crear el tbody
-        const tabla = document.querySelector('#tablaClientes');
-        if (tabla) {
-            console.warn('Tabla encontrada, creando nuevo tbody');
-            tbody = document.createElement('tbody');
-            tabla.appendChild(tbody);
-        } else {
-            console.error('No se encontró la tabla #tablaClientes');
-            
-            // Último intento: buscar cualquier tabla en la página
-            const tablaAlternativa = document.querySelector('table');
-            if (tablaAlternativa) {
-                console.warn('Usando tabla alternativa');
-                tbody = tablaAlternativa.querySelector('tbody');
-                if (!tbody) {
-                    tbody = document.createElement('tbody');
-                    tablaAlternativa.appendChild(tbody);
-                }
-            } else {
-                console.error('No se pudo encontrar ninguna tabla para mostrar los clientes');
-                // Mostrar notificación de error
-                mostrarNotificacion('Error al mostrar la tabla de clientes', 'error');
-                return;
-            }
-        }
-    }
-    
-    // Limpiar tabla
-    tbody.innerHTML = '';
-    
-    // Si no hay clientes, mostrar mensaje
-    if (clientes.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center">
-                    <i class="fas fa-users me-2"></i>
-                    No hay clientes registrados
-                </td>
-            </tr>
-        `;
-        actualizarContadorClientes(0);
-        return;
-    }
-    
-    try {
-        // Agregar cada cliente a la tabla
-        clientes.forEach(cliente => {
-            const fila = document.createElement('tr');
-            fila.innerHTML = `
-                <td>${cliente.nombreCompleto || 'N/A'}</td>
-                <td>${cliente.tipoDocumento || 'N/A'}: ${cliente.numeroDocumento || 'N/A'}</td>
-                <td>${cliente.telefono || 'N/A'}</td>
-                <td>${cliente.correoElectronico || '-'}</td>
-                <td>
-                    <span class="badge ${cliente.estado === 'Activo' ? 'bg-success' : 'bg-secondary'}">
-                        ${cliente.estado || 'N/A'}
-                    </span>
-                </td>
-                <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button type="button" class="btn btn-outline-primary btn-editar" 
-                                data-id="${cliente.clienteId}" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-info btn-prestamos" 
-                                data-id="${cliente.clienteId}" title="Ver préstamos">
-                            <i class="fas fa-money-bill-wave"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-danger btn-eliminar" 
-                                data-id="${cliente.clienteId}" title="Eliminar">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(fila);
-        });
-        
-        // Actualizar contador
-        actualizarContadorClientes(clientes.length);
-        
-        // Después de actualizar la tabla, configurar handlers de botones
-        configurarBotonesTabla();
-    } catch (error) {
-        console.error('Error al renderizar los clientes en la tabla:', error);
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center text-danger">
-                    <i class="fas fa-exclamation-circle me-2"></i>
-                    Error al mostrar los clientes: ${error.message}
-                </td>
-            </tr>
-        `;
-    }
- }
 
 // Función para crear clientes de prueba
 function crearClientesPrueba() {
@@ -1162,116 +857,95 @@ if (contadorClientes) {
 
 // Guardar nuevo cliente
 function guardarNuevoCliente() {
-    console.log('Guardando nuevo cliente...');
+console.log('Guardando nuevo cliente...');
 
-    const form = document.getElementById('formNuevoCliente');
-    if (!form) {
-        console.error('No se encontró el formulario de nuevo cliente');
-        mostrarNotificacion('Error al procesar el formulario', 'error');
-        return;
+const form = document.getElementById('formNuevoCliente');
+if (!form) {
+    console.error('No se encontró el formulario de nuevo cliente');
+    mostrarNotificacion('Error al procesar el formulario', 'error');
+    return;
+}
+
+// Validar formulario usando la API de validación de HTML5
+if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+}
+
+// Obtener datos del formulario
+const formData = new FormData(form);
+const cliente = Object.fromEntries(formData.entries());
+
+// Agregar campo de estado
+cliente.estado = 'Activo';
+
+// Mostrar indicador de carga
+const btnGuardar = document.getElementById('btnGuardarNuevoCliente');
+const textoOriginal = btnGuardar.innerHTML;
+btnGuardar.disabled = true;
+btnGuardar.innerHTML = `
+    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+    Guardando...
+`;
+
+// Enviar a la API
+fetch('/api/clientes', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(cliente)
+})
+.then(response => {
+    if (!response.ok) {
+        return response.json().then(data => {
+            throw new Error(data.message || `Error ${response.status}: ${response.statusText}`);
+        });
     }
-
-    // Validar formulario usando la API de validación de HTML5
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
+    return response.json();
+})
+.then(nuevoCliente => {
+    console.log('Cliente creado:', nuevoCliente);
+    
+    // Actualizar lista de clientes
+    if (Array.isArray(clientes)) {
+        clientes.push(nuevoCliente);
+    } else {
+        clientes = [nuevoCliente];
     }
-
-    // Obtener datos del formulario
-    const formData = new FormData(form);
-    const cliente = Object.fromEntries(formData.entries());
-
-    // Agregar campo de estado
-    cliente.estado = 'Activo';
-
-    // Mostrar indicador de carga
-    const btnGuardar = document.getElementById('btnGuardarNuevoCliente');
-    const textoOriginal = btnGuardar.innerHTML;
-    btnGuardar.disabled = true;
-    btnGuardar.innerHTML = `
-        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-        Guardando...
-    `;
-
-    // NUEVO: Crear una variable para rastrear si se ha completado
-    let completado = false;
-
-    // Agregar temporizador para detectar bloqueos
-    const timeoutId = setTimeout(() => {
-        if (!completado) {
-            console.warn('La operación de guardar está tardando demasiado, posible problema de red');
-            btnGuardar.innerHTML = textoOriginal;
-            btnGuardar.disabled = false;
-            mostrarNotificacion('La operación está tardando más de lo esperado. Intente nuevamente.', 'warning');
-        }
-    }, 8000);
-
-    // Enviar a la API
-    fetch('/api/clientes', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(cliente)
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => {
-                throw new Error(data.message || `Error ${response.status}: ${response.statusText}`);
-            });
-        }
-        return response.json();
-    })
-    .then(nuevoCliente => {
-        completado = true;
-        clearTimeout(timeoutId);
-        console.log('Cliente creado:', nuevoCliente);
-        
-        // Actualizar lista de clientes
-        if (Array.isArray(clientes)) {
-            clientes.push(nuevoCliente);
-            // NUEVO: Actualizar caché
-            guardarClientesEnCache(clientes);
+    actualizarTablaClientes();
+    
+    // Cerrar modal
+    try {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
+        if (modal) {
+            modal.hide();
         } else {
-            clientes = [nuevoCliente];
-            // NUEVO: Actualizar caché
-            guardarClientesEnCache(clientes);
+            // Alternativa si bootstrap no está disponible
+            document.getElementById('modalNuevoCliente').style.display = 'none';
+            document.body.classList.remove('modal-open');
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) backdrop.remove();
         }
-        actualizarTablaClientes();
-        
-        // Cerrar modal
-        try {
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
-            if (modal) {
-                modal.hide();
-            } else {
-                // Alternativa si bootstrap no está disponible
-                document.getElementById('modalNuevoCliente').style.display = 'none';
-                document.body.classList.remove('modal-open');
-                const backdrop = document.querySelector('.modal-backdrop');
-                if (backdrop) backdrop.remove();
-            }
-        } catch (error) {
-            console.error('Error al cerrar modal:', error);
-        }
-        
-        // Resetear formulario
-        form.reset();
-        
-        // Mostrar notificación de éxito
-        mostrarNotificacion('Cliente guardado correctamente', 'success');
-    })
-    .catch(error => {
-        completado = true;
-        clearTimeout(timeoutId);
-        console.error('Error al guardar cliente:', error);
-        mostrarNotificacion(`Error: ${error.message}`, 'danger');
-    })
-    .finally(() => {
-        // Restaurar botón
-        btnGuardar.disabled = false;
-        btnGuardar.innerHTML = textoOriginal;
-    });
+    } catch (error) {
+        console.error('Error al cerrar modal:', error);
+    }
+    
+    // Resetear formulario
+    form.reset();
+    
+    // Mostrar notificación de éxito
+    mostrarNotificacion('Cliente guardado correctamente', 'success');
+})
+.catch(error => {
+    console.error('Error al guardar cliente:', error);
+    mostrarNotificacion(`Error: ${error.message}`, 'danger');
+})
+.finally(() => {
+    // Restaurar botón
+    btnGuardar.disabled = false;
+    btnGuardar.innerHTML = textoOriginal;
+});
 }
 
 // Editar cliente
@@ -2128,30 +1802,6 @@ window.addEventListener('beforeunload', function() {
 clientes = null;
 clienteSeleccionado = null;
 });
-
-function limpiarRecursosClientes() {
-    console.log('Limpiando recursos del módulo de clientes...');
-    
-    // Guardar datos en caché antes de limpiar
-    if (Array.isArray(clientes) && clientes.length > 0) {
-        guardarClientesEnCache(clientes);
-    }
-    
-    // Detener detectores
-    if (window.detectorClientesActivo) {
-        clearInterval(window.detectorClientesActivo);
-        window.detectorClientesActivo = null;
-    }
-    
-    // No limpiar completamente los datos para mantener la caché en memoria
-    // Pero sí marcar que el módulo no está inicializado para una correcta reinicialización
-    window.clientesModuloInicializado = false;
-}
-
-// Exponer la función de limpieza
-window.limpiarRecursosClientes = limpiarRecursosClientes;
-
-// Resto del archivo se mantiene igual
 
 // Exponer funciones al ámbito global
 window.initClientesPage = initClientesPage;
