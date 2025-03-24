@@ -224,7 +224,7 @@ function cleanupPreviousPage(pageName) {
     // (si se identifican problemas específicos con estos)
 }
 
-// Cargar página - VERSIÓN MEJORADA con solución para navegación de préstamos a pagos
+// Cargar página - VERSIÓN MEJORADA
 function loadPage(pageName) {
     console.log(`Cargando página: ${pageName}`);
     
@@ -237,37 +237,6 @@ function loadPage(pageName) {
         }, 300);
     }
     
-    // Guardar página anterior
-    const previousPage = window.currentPage;
-    window.previousPage = previousPage;
-    
-    // SOLUCIÓN: Limpieza específica cuando venimos de préstamos a pagos
-    if (previousPage === 'prestamos' && pageName === 'pagos') {
-        console.log('Detectada navegación de préstamos a pagos - limpiando DOM...');
-        
-        // 1. Ocultar todas las páginas actuales
-        document.querySelectorAll('.page-content').forEach(page => {
-            page.classList.remove('active');
-            page.style.display = 'none'; // Forzar ocultamiento
-        });
-        
-        // 2. Eliminar referencias a tablas anteriores
-        const paginadores = document.querySelectorAll('[id^="paginador-"]');
-        paginadores.forEach(paginador => paginador.remove());
-        
-        // 3. Limpiar variables globales que podrían causar conflicto
-        window.prestamoSeleccionado = null;
-        window.prestamoActual = null;
-        if (window.tablasPaginadas) window.tablasPaginadas = {}; // Resetear tablas paginadas
-        
-        // 4. Limpiar contenidos específicos que podrían persistir
-        const prestamosPage = document.getElementById('prestamos');
-        if (prestamosPage) {
-            prestamosPage.classList.remove('active');
-            // Opcional: prestamosPage.innerHTML = ''; // Solo usar si hay problemas graves
-        }
-    }
-    
     // Actualizar estado
     window.currentPage = pageName;
     
@@ -278,7 +247,7 @@ function loadPage(pageName) {
         // Intento de recuperación: buscar cualquier contenedor principal
         const altContainer = document.querySelector('#pageContent, #content, main, .main-content');
         if (altContainer) {
-            console.log("Usando contenedor alternativo:", altContainer.id || 'contenedor sin ID');
+            console.log("Usando contenedor alternativo:", altContainer);
             loadPageContent(pageName, altContainer);
         } else {
             console.error("No se encontró ningún contenedor principal válido");
@@ -288,43 +257,6 @@ function loadPage(pageName) {
     }
     
     loadPageContent(pageName, mainContainer);
-    
-    // NUEVO: Notificar el cambio de página para sistemas integrados
-    if (window.appEvents && typeof window.appEvents.emit === 'function') {
-        window.appEvents.emit('pageChanged', {
-            from: previousPage,
-            to: pageName,
-            timestamp: Date.now()
-        });
-    }
-    
-    // NUEVO: Programar verificación adicional para la página de pagos
-    if (pageName === 'pagos') {
-        setTimeout(() => {
-            const pagosPage = document.getElementById('pagos');
-            if (pagosPage && !pagosPage.classList.contains('active')) {
-                console.log('Forzando activación de página de pagos...');
-                document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
-                pagosPage.classList.add('active');
-            }
-            
-            // Verificar tablas específicas de pagos
-            const tablasEsperadas = ['tablaHistorialPagos', 'tablaPagosPendientes'];
-            let todasPresentes = true;
-            
-            tablasEsperadas.forEach(id => {
-                if (!document.getElementById(id)) {
-                    console.warn(`Tabla #${id} no encontrada, posible problema de carga`);
-                    todasPresentes = false;
-                }
-            });
-            
-            if (!todasPresentes && typeof initPagosPage === 'function') {
-                console.log('Reiniciando módulo de pagos...');
-                initPagosPage();
-            }
-        }, 800);
-    }
 }
 
 // Función separada para cargar contenido - MODIFICADA PARA AJUSTARSE A TU ESTRUCTURA
