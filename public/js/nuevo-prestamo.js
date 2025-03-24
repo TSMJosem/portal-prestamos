@@ -605,53 +605,62 @@ function fetchWithErrorHandling(url, options) {
 function submitFormWithAmortizacion(form) {
     // Verificar si es cliente nuevo o existente
     const esClienteNuevo = document.getElementById('clienteNuevo')?.checked || false;
-    
+   
     // Si es cliente nuevo, primero crear el cliente
     if (esClienteNuevo) {
         // Obtener datos del cliente nuevo
         const correoElectronicoInput = document.getElementById('correoElectronico');
-        // Si no hay correo o está vacío, enviar null
-        const correoElectronicoValue = correoElectronicoInput && 
-                                      correoElectronicoInput.value && 
-                                      correoElectronicoInput.value.trim() !== '' 
-            ? correoElectronicoInput.value.trim() 
-            : null;
-
-        const numeroDocumento = document.getElementById('numeroDocumento')?.value;
         
+        // MODIFICACIÓN: Generar un correo electrónico único si está vacío
+        let correoElectronicoValue;
+        if (correoElectronicoInput && correoElectronicoInput.value && correoElectronicoInput.value.trim() !== '') {
+            correoElectronicoValue = correoElectronicoInput.value.trim();
+        } else {
+            // Generar un correo único con timestamp y valor aleatorio para garantizar unicidad
+            const timestamp = Date.now();
+            const random = Math.floor(Math.random() * 10000);
+            correoElectronicoValue = `sin-correo-${timestamp}-${random}@sistema.local`;
+        }
+        
+        const numeroDocumento = document.getElementById('numeroDocumento')?.value;
+       
         const clienteData = {
             nombreCompleto: document.getElementById('nombreCompleto')?.value,
             tipoDocumento: document.getElementById('tipoDocumento')?.value,
             numeroDocumento: numeroDocumento,
             telefono: document.getElementById('telefono')?.value,
-            correoElectronico: correoElectronicoValue,
+            correoElectronico: correoElectronicoValue, // Ahora siempre tendrá un valor, nunca null
             estado: 'Activo'
         };
-        
+       
         // Verificar datos mínimos
-        if (!clienteData.nombreCompleto || !clienteData.tipoDocumento || 
+        if (!clienteData.nombreCompleto || !clienteData.tipoDocumento ||
             !clienteData.numeroDocumento || !clienteData.telefono) {
             showNotification('Por favor, complete los datos del cliente nuevo', 'error');
             return;
         }
-        
+       
         // Mostrar indicador de carga
         const submitBtn = form.querySelector('button[type="submit"]');
         if (!submitBtn) return;
-        
+       
         const btnText = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Verificando cliente...';
-        
+       
         // Verificar primero si el cliente ya existe
         verificarClienteExistente(numeroDocumento)
             .then(existeCliente => {
                 if (existeCliente) {
                     throw new Error('Ya existe un cliente con ese número de documento. Por favor, utilice la opción de cliente existente.');
                 }
-                
+               
                 // Si no existe, proceder con la creación
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creando cliente...';
+                
+                // Agregar log para verificar los datos que se envían
+                console.log('Datos del cliente a crear:', clienteData);
+                
                 return fetchWithErrorHandling('/api/clientes', {
                     method: 'POST',
                     headers: {
@@ -667,7 +676,7 @@ function submitFormWithAmortizacion(form) {
             .catch(error => {
                 console.error('Error:', error);
                 showNotification('Error al crear el cliente: ' + error.message, 'error');
-                
+               
                 // Restaurar botón
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = btnText;
@@ -679,14 +688,14 @@ function submitFormWithAmortizacion(form) {
             showNotification('Por favor, seleccione un cliente', 'error');
             return;
         }
-        
+       
         const submitBtn = form.querySelector('button[type="submit"]');
         if (!submitBtn) return;
-        
+       
         const btnText = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
-        
+       
         crearPrestamo(form, clienteId, submitBtn, btnText);
     }
 }
@@ -699,117 +708,164 @@ function crearPrestamo(form, clienteId, submitBtn, btnText) {
     const plazoMeses = parseInt(document.querySelector('input[name="plazoMeses"]')?.value) || 0;
     const frecuenciaPago = document.querySelector('select[name="frecuenciaPago"]')?.value || 'Mensual';
     
-// Calcular valores si no están presentes
-let cuotaMensual = 0;
-let totalAPagar = 0;
-let totalInteres = 0;
+    // Calcular valores si no están presentes
+    let cuotaMensual = 0;
+    let totalAPagar = 0;
+    let totalInteres = 0;
 
-// Intentar obtener valores calculados
-const cuotaMensualElement = document.querySelector('input[name="cuotaMensual"]');
-const totalAPagarElement = document.querySelector('input[name="totalAPagar"]');
-const totalInteresElement = document.querySelector('input[name="totalInteres"]');
+    // Intentar obtener valores calculados
+    const cuotaMensualElement = document.querySelector('input[name="cuotaMensual"]');
+    const totalAPagarElement = document.querySelector('input[name="totalAPagar"]');
+    const totalInteresElement = document.querySelector('input[name="totalInteres"]');
 
-if (cuotaMensualElement && cuotaMensualElement.value) {
-    cuotaMensual = parseFloat(cuotaMensualElement.value);
-} else {
-    // Calcular manualmente
-    const tasaDecimal = interesMensual / 100;
-    const factorFrecuencia = (frecuenciaPago === 'Semanal') ? 12/52 : (frecuenciaPago === 'Quincenal') ? 12/24 : 1;
-    const tasaAjustada = tasaDecimal * factorFrecuencia;
-    const numeroPagos = calcularNumeroPagos(plazoMeses, frecuenciaPago);
-    
-    const numerador = cantidadPrestamo * tasaAjustada * Math.pow(1 + tasaAjustada, numeroPagos);
-    const denominador = Math.pow(1 + tasaAjustada, numeroPagos) - 1;
-    
-    if (denominador !== 0) {
-        cuotaMensual = numerador / denominador;
+    if (cuotaMensualElement && cuotaMensualElement.value) {
+        cuotaMensual = parseFloat(cuotaMensualElement.value);
     } else {
-        cuotaMensual = cantidadPrestamo / numeroPagos;
-    }
-    
-    cuotaMensual = Math.round(cuotaMensual * 100) / 100;
-    totalAPagar = cuotaMensual * numeroPagos;
-    totalInteres = totalAPagar - cantidadPrestamo;
-}
-
-if (totalAPagarElement && totalAPagarElement.value) {
-    totalAPagar = parseFloat(totalAPagarElement.value);
-}
-
-if (totalInteresElement && totalInteresElement.value) {
-    totalInteres = parseFloat(totalInteresElement.value);
-}
-
-// Generar objeto de préstamo
-const prestamoData = {
-    clienteId: clienteId,
-    cantidadPrestamo: cantidadPrestamo,
-    interesMensual: interesMensual,
-    plazoMeses: plazoMeses,
-    frecuenciaPago: frecuenciaPago,
-    cuotaMensual: cuotaMensual,
-    totalAPagar: totalAPagar,
-    totalInteres: totalInteres,
-    fechaSolicitud: document.querySelector('input[name="fechaSolicitud"]')?.value || new Date().toISOString().split('T')[0]
-};
-
-// Generar tabla de amortización
-const fechaSolicitud = prestamoData.fechaSolicitud ? new Date(prestamoData.fechaSolicitud) : new Date();
-
-prestamoData.tablaAmortizacion = generarTablaAmortizacionData(
-    prestamoData.cantidadPrestamo,
-    prestamoData.cuotaMensual,
-    prestamoData.interesMensual / 100,
-    calcularNumeroPagos(prestamoData.plazoMeses, prestamoData.frecuenciaPago),
-    prestamoData.frecuenciaPago,
-    fechaSolicitud
-);
-
-// Enviar datos a la API
-fetchWithErrorHandling('/api/prestamos', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(prestamoData)
-})
-.then(data => {
-    // Mostrar notificación de éxito
-    showNotification('Préstamo creado correctamente', 'success');
-    
-    // Verificar la estructura de la respuesta para acceder correctamente al prestamoId
-    const prestamoId = data.prestamo?.prestamoId || data.prestamoId || '';
-    
-    // Preguntar si desea generar recibo solo si tenemos un prestamoId
-    if (prestamoId) {
-        if (confirm('¿Desea generar el contrato del préstamo en PDF?')) {
-            window.open(`/api/prestamos/${prestamoId}/recibo`, '_blank');
-        }
-    }
-    
-    // Limpiar formulario
-    form.reset();
-    inicializarFechas();
-    
-    // Redireccionar a la lista de préstamos después de un tiempo
-    setTimeout(() => {
-        const prestamoLink = document.querySelector('.nav-link[data-page="prestamos"]');
-        if (prestamoLink) {
-            prestamoLink.click();
+        // Calcular manualmente
+        const tasaDecimal = interesMensual / 100;
+        const factorFrecuencia = (frecuenciaPago === 'Semanal') ? 12/52 : (frecuenciaPago === 'Quincenal') ? 12/24 : 1;
+        const tasaAjustada = tasaDecimal * factorFrecuencia;
+        const numeroPagos = calcularNumeroPagos(plazoMeses, frecuenciaPago);
+        
+        const numerador = cantidadPrestamo * tasaAjustada * Math.pow(1 + tasaAjustada, numeroPagos);
+        const denominador = Math.pow(1 + tasaAjustada, numeroPagos) - 1;
+        
+        if (denominador !== 0) {
+            cuotaMensual = numerador / denominador;
         } else {
-            window.location.href = '/prestamos';
+            cuotaMensual = cantidadPrestamo / numeroPagos;
         }
-    }, 1500);
-})
-.catch(error => {
-    console.error('Error:', error);
-    showNotification('Error al crear el préstamo: ' + error.message, 'error');
-})
-.finally(() => {
-    // Restaurar botón
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = btnText;
-});
+        
+        cuotaMensual = Math.round(cuotaMensual * 100) / 100;
+        totalAPagar = cuotaMensual * numeroPagos;
+        totalInteres = totalAPagar - cantidadPrestamo;
+    }
+
+    if (totalAPagarElement && totalAPagarElement.value) {
+        totalAPagar = parseFloat(totalAPagarElement.value);
+    }
+
+    if (totalInteresElement && totalInteresElement.value) {
+        totalInteres = parseFloat(totalInteresElement.value);
+    }
+
+    // Generar objeto de préstamo
+    const prestamoData = {
+        clienteId: clienteId,
+        cantidadPrestamo: cantidadPrestamo,
+        interesMensual: interesMensual,
+        plazoMeses: plazoMeses,
+        frecuenciaPago: frecuenciaPago,
+        cuotaMensual: cuotaMensual,
+        totalAPagar: totalAPagar,
+        totalInteres: totalInteres,
+        fechaSolicitud: document.querySelector('input[name="fechaSolicitud"]')?.value || new Date().toISOString().split('T')[0]
+    };
+
+    // Generar tabla de amortización
+    const fechaSolicitud = prestamoData.fechaSolicitud ? new Date(prestamoData.fechaSolicitud) : new Date();
+
+    prestamoData.tablaAmortizacion = generarTablaAmortizacionData(
+        prestamoData.cantidadPrestamo,
+        prestamoData.cuotaMensual,
+        prestamoData.interesMensual / 100,
+        calcularNumeroPagos(prestamoData.plazoMeses, prestamoData.frecuenciaPago),
+        prestamoData.frecuenciaPago,
+        fechaSolicitud
+    );
+
+    // Enviar datos a la API
+    fetchWithErrorHandling('/api/prestamos', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(prestamoData)
+    })
+    .then(data => {
+        // Mostrar notificación de éxito
+        showNotification('Préstamo creado correctamente', 'success');
+        
+        // Verificar la estructura de la respuesta para acceder correctamente al prestamoId
+        let prestamoId = '';
+        
+        // Intentar obtener el ID del préstamo de diferentes posibles estructuras
+        if (data) {
+            if (data.prestamo && data.prestamo.prestamoId) {
+                prestamoId = data.prestamo.prestamoId;
+            } else if (data.prestamoId) {
+                prestamoId = data.prestamoId;
+            } else if (typeof data === 'string' && data.includes('prestamoId')) {
+                // Intentar extraer ID de una respuesta en formato string
+                try {
+                    const match = data.match(/prestamoId[\"\']\s*:\s*[\"\'](.*?)[\"\']/);
+                    if (match && match[1]) prestamoId = match[1];
+                } catch (e) {
+                    console.log('No se pudo extraer ID de la respuesta string');
+                }
+            }
+        }
+        
+        // Preguntar si desea generar recibo solo si tenemos un prestamoId
+        if (prestamoId) {
+            console.log('Préstamo creado con ID:', prestamoId);
+            if (confirm('¿Desea generar el contrato del préstamo en PDF?')) {
+                window.open(`/api/prestamos/${prestamoId}/recibo`, '_blank');
+            }
+        } else {
+            console.log('Préstamo creado pero no se pudo determinar el ID específico');
+        }
+        
+        // Limpiar formulario
+        form.reset();
+        inicializarFechas();
+        
+        // Redireccionar a la lista de préstamos después de un tiempo
+        setTimeout(() => {
+            const prestamoLink = document.querySelector('.nav-link[data-page="prestamos"]');
+            if (prestamoLink) {
+                prestamoLink.click();
+            } else {
+                window.location.href = '/prestamos';
+            }
+        }, 1500);
+    })
+    .catch(error => {
+        console.error('Error detallado:', error);
+        
+        // Verificar si el préstamo se creó a pesar del error
+        fetch('/api/prestamos?ultimo=true')
+        .then(response => response.json())
+        .then(ultimosPrestamos => {
+            const timestampReciente = Date.now() - 10000; // 10 segundos atrás
+            const prestamoReciente = ultimosPrestamos.find(p => 
+                new Date(p.fechaSolicitud).getTime() > timestampReciente);
+                
+            if (prestamoReciente) {
+                showNotification('El préstamo parece haberse creado correctamente a pesar del error de visualización. Redirigiendo...', 'warning');
+                
+                // Redirigir a la lista de préstamos
+                setTimeout(() => {
+                    const prestamoLink = document.querySelector('.nav-link[data-page="prestamos"]');
+                    if (prestamoLink) {
+                        prestamoLink.click();
+                    } else {
+                        window.location.href = '/prestamos';
+                    }
+                }, 2000);
+            } else {
+                showNotification('Error al crear el préstamo: ' + error.message, 'error');
+            }
+        })
+        .catch(() => {
+            showNotification('Error al crear el préstamo: ' + error.message, 'error');
+        });
+    })
+    .finally(() => {
+        // Restaurar botón
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = btnText;
+    });
 }
 
 // Generar datos de tabla de amortización para enviar

@@ -127,23 +127,37 @@ ClienteSchema.statics.createCliente = async function(clienteData) {
 };
 
 ClienteSchema.statics.updateCliente = async function(clienteId, clienteData) {
-    // Normalizar datos antes de actualizar
-    const datosNormalizados = {
-        ...clienteData,
-        nombreCompleto: clienteData.nombreCompleto?.trim(),
-        numeroDocumento: clienteData.numeroDocumento?.trim(),
-        telefono: clienteData.telefono?.trim(),
-        correoElectronico: clienteData.correoElectronico?.trim() || null
-    };
+    // Crear un objeto con solo los datos proporcionados
+    const datosActualizados = {};
     
+    // Solo incluir campos que existen en clienteData
+    if (clienteData.nombreCompleto !== undefined) {
+        datosActualizados.nombreCompleto = clienteData.nombreCompleto.trim();
+    }
+    
+    if (clienteData.numeroDocumento !== undefined) {
+        datosActualizados.numeroDocumento = clienteData.numeroDocumento.trim();
+    }
+    
+    if (clienteData.telefono !== undefined) {
+        datosActualizados.telefono = clienteData.telefono.trim();
+    }
+    
+    if (clienteData.correoElectronico !== undefined) {
+        // Si se proporciona un correo, lo limpiamos, pero no lo cambiamos a null si está vacío
+        datosActualizados.correoElectronico = clienteData.correoElectronico.trim() || 
+            `cliente-${Date.now()}-${Math.random().toString().slice(2,8)}@sistema.local`;
+    }
+    
+    if (clienteData.estado !== undefined) {
+        datosActualizados.estado = clienteData.estado;
+    }
+    
+    // Actualizar solo los campos proporcionados usando $set
     return await this.findOneAndUpdate(
         { clienteId },
-        datosNormalizados,
-        { 
-            new: true, 
-            runValidators: true,
-            context: 'query'
-        }
+        { $set: datosActualizados },
+        {new: true, runValidators: true, context: 'query'}
     );
 };
 
