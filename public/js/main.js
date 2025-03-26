@@ -1741,6 +1741,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 1000);
 });
 
+
+
 // Exportar funciones para uso global
 window.loadPage = loadPage;
 window.showNotification = showNotification;

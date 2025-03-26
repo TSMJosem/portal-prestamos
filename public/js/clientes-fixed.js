@@ -976,6 +976,31 @@ function crearModalNuevoCliente() {
 
 // Función para guardar nuevo cliente
 function guardarNuevoCliente() {
+
+    // Cerrar modal
+try {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
+        if (modal) {
+            modal.hide();
+            // Solución para eliminar el backdrop huérfano
+            setTimeout(() => {
+                document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+                    backdrop.remove();
+                });
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }, 300);
+        }
+    } catch (error) {
+        console.error('Error al cerrar modal:', error);
+        // Solución de respaldo para backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+            backdrop.remove();
+        });
+        document.body.classList.remove('modal-open');
+    }
+
     console.log('💾 Guardando nuevo cliente (mejorado)...');
     
     const form = document.getElementById('formNuevoCliente');
