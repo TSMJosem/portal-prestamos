@@ -104,6 +104,8 @@ function garantizarCargaClientes() {
             
             // Actualizar la tabla
             mostrarClientesEnTabla(clientesArray);
+
+            implementarBusquedaEnTiempoReal();
             
             // NUEVO: Notificar a otros módulos sobre la actualización de los datos
             notificarCambiosClientes('cargar', null);
@@ -278,6 +280,8 @@ function configurarBotonesAccion() {
         btnNuevoCliente.removeEventListener('click', abrirModalNuevoCliente);
         btnNuevoCliente.addEventListener('click', abrirModalNuevoCliente);
     }
+
+    implementarBusquedaEnTiempoReal();
 }
 
 // Funciones manejadoras para evitar el problema de "this"
@@ -1503,6 +1507,112 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+let busquedaInicializada = false;
+
+// Función para implementar la búsqueda en tiempo real de clientes
+function implementarBusquedaEnTiempoReal() {
+    console.log('🔍 Configurando búsqueda en tiempo real para clientes...');
+    
+    // Obtener referencia al campo de búsqueda
+    const campoBusqueda = document.getElementById('buscarCliente');
+    if (!campoBusqueda) {
+        console.error('No se encontró el campo de búsqueda #buscarCliente');
+        return;
+    }
+    
+    // Si ya fue inicializado, no hacer nada para evitar pérdida de foco
+    if (busquedaInicializada) {
+        console.log('La búsqueda ya está inicializada, omitiendo configuración');
+        return;
+    }
+    
+    // Marcar como inicializado
+    busquedaInicializada = true;
+    
+    // Añadir event listener para eventos de escritura
+    campoBusqueda.addEventListener('input', function(e) {
+        // Obtener término de búsqueda y eliminar espacios en blanco extras
+        const terminoBusqueda = e.target.value.trim().toLowerCase();
+        
+        // Obtener datos de clientes de la caché
+        const clientes = window.clientesCache?.datos || window.clientes || [];
+        
+        // Si el campo está vacío, mostrar todos los clientes
+        if (!terminoBusqueda) {
+            console.log('Campo de búsqueda vacío, mostrando todos los clientes');
+            mostrarClientesEnTabla(clientes);
+            return;
+        }
+        
+        console.log(`Buscando clientes que coincidan con: "${terminoBusqueda}"`);
+        
+        // Filtrar clientes según el término de búsqueda
+        const clientesFiltrados = clientes.filter(cliente => {
+            // Buscar en múltiples campos para mayor usabilidad
+            return (
+                (cliente.nombreCompleto && cliente.nombreCompleto.toLowerCase().includes(terminoBusqueda)) ||
+                (cliente.numeroDocumento && cliente.numeroDocumento.toLowerCase().includes(terminoBusqueda)) ||
+                (cliente.telefono && cliente.telefono.toLowerCase().includes(terminoBusqueda)) ||
+                (cliente.correoElectronico && cliente.correoElectronico.toLowerCase().includes(terminoBusqueda))
+            );
+        });
+        
+        console.log(`Se encontraron ${clientesFiltrados.length} coincidencias`);
+        
+        // Actualizar la tabla con los resultados filtrados
+        mostrarClientesEnTabla(clientesFiltrados);
+    });
+    
+    // Agregar botón para limpiar búsqueda
+    agregarBotonLimpiarBusqueda(campoBusqueda);
+    
+    console.log('✅ Búsqueda en tiempo real configurada exitosamente');
+}
+
+// Función para agregar botón de limpiar búsqueda
+function agregarBotonLimpiarBusqueda(inputBusqueda) {
+    // Verificar si el campo de búsqueda tiene un padre que podamos usar
+    const contenedor = inputBusqueda.parentElement;
+    if (!contenedor) return;
+    
+    // Verificar si ya existe el botón para evitar duplicados
+    if (document.getElementById('limpiarBusqueda')) return;
+    
+    // Crear botón de limpiar
+    const botonLimpiar = document.createElement('button');
+    botonLimpiar.type = 'button';
+    botonLimpiar.className = 'btn btn-outline-secondary btn-sm position-absolute end-0 me-5 mt-1 d-none';
+    botonLimpiar.style.top = '0';
+    botonLimpiar.style.right = '50px'; // Ajustar posición
+    botonLimpiar.style.padding = '0.25rem 0.5rem';
+    botonLimpiar.innerHTML = '<i class="fas fa-times"></i>';
+    botonLimpiar.title = 'Limpiar búsqueda';
+    botonLimpiar.id = 'limpiarBusqueda';
+    
+    // Asegurarse de que el contenedor tenga posición relativa
+    contenedor.style.position = 'relative';
+    
+    // Añadir al DOM, justo después del input
+    inputBusqueda.insertAdjacentElement('afterend', botonLimpiar);
+    
+    // Mostrar/ocultar botón según contenido del input
+    inputBusqueda.addEventListener('input', function() {
+        if (this.value.trim()) {
+            botonLimpiar.classList.remove('d-none');
+        } else {
+            botonLimpiar.classList.add('d-none');
+        }
+    });
+    
+    // Función para limpiar búsqueda
+    botonLimpiar.addEventListener('click', function() {
+        inputBusqueda.value = '';
+        inputBusqueda.dispatchEvent(new Event('input'));
+        botonLimpiar.classList.add('d-none');
+        inputBusqueda.focus();
+    });
+}
 
 // Sobreescribir funciones originales para mayor compatibilidad
 window.actualizarTablaClientes = function() {
