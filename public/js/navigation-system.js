@@ -42,7 +42,7 @@ window.appState = {
 };
 
 // Sistema unificado de navegación
-class NavigationSystem {
+window.NavigationSystem = class{
     constructor() {
         this.moduleInitializers = {
             'dashboard': this.initDashboard,

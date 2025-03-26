@@ -45,114 +45,191 @@ function isModuleLoaded(globalName) {
 function initSystems() {
     console.log('🚀 Iniciando sistemas mejorados...');
     
-    // 1. Cargar sistema de navegación si no está cargado
-    if (!isModuleLoaded('navigationSystem')) {
+    // Evitar redefiniciones o inicializaciones múltiples
+    if (window.systemsInitialized) {
+        console.log('Los sistemas ya están inicializados');
+        return;
+    }
+    
+    // 1. Inicializar sistema de navegación si está disponible
+    if (window.navigationSystem) {
+        console.log('Sistema de navegación ya inicializado');
+    } else if (typeof window.NavigationSystem === 'function') {
+        console.log('Creando instancia de NavigationSystem');
+        try {
+            window.navigationSystem = new window.NavigationSystem();
+            window.navigationSystem.init();
+        } catch (error) {
+            console.error('Error al inicializar NavigationSystem:', error);
+            createFallbackNavigationSystem();
+        }
+    } else {
+        console.log('NavigationSystem no disponible, cargando script...');
+        
+        // Cargar script de navegación
         loadScript('/js/navigation-system.js', () => {
-            // 2. Cargar sistema de paginación si no está cargado
-            if (!isModuleLoaded('paginationSystem')) {
-                loadScript('/js/pagination-fix.js', () => {
-                    // 3. Inicializar sistemas
-                    initNavigationAndPagination();
-                });
+            if (typeof window.NavigationSystem === 'function') {
+                try {
+                    window.navigationSystem = new window.NavigationSystem();
+                    window.navigationSystem.init();
+                } catch (error) {
+                    console.error('Error al inicializar NavigationSystem:', error);
+                    createFallbackNavigationSystem();
+                }
             } else {
-                // Solo inicializar navegación
-                initNavigationAndPagination();
+                createFallbackNavigationSystem();
             }
         });
-    } else if (!isModuleLoaded('paginationSystem')) {
-        // Cargar sistema de paginación si no está cargado
-        loadScript('/js/pagination-fix.js', () => {
-            // Inicializar sistemas
-            initNavigationAndPagination();
-        });
-    } else {
-        // Ambos sistemas ya están cargados, solo inicializar
-        initNavigationAndPagination();
-    }
-}
-
-// Función para inicializar ambos sistemas
-function initNavigationAndPagination() {
-    // Crear el sistema de navegación si no existe
-    if (!window.navigationSystem && typeof window.NavigationSystem === 'function') {
-        window.navigationSystem = new window.NavigationSystem();
     }
     
-    // Inicializar sistema de navegación
-    if (window.navigationSystem && typeof window.navigationSystem.init === 'function') {
-        window.navigationSystem.init();
-    } else {
-        console.error('⚠️ No se pudo inicializar el sistema de navegación');
-        
-        // Intentar recuperación: crear objeto mínimo si no existe
-        if (!window.navigationSystem) {
-            window.navigationSystem = {
-                navigateTo: function(pageName) {
-                    console.log(`Navegación de respaldo a: ${pageName}`);
-                    
-                    // Actualizar estado
-                    window.currentPage = pageName;
-                    
-                    // Ocultar todas las páginas
-                    document.querySelectorAll('.page-content').forEach(page => {
-                        page.classList.remove('active');
-                    });
-                    
-                    // Mostrar la página destino
-                    const pageElement = document.getElementById(pageName);
-                    if (pageElement) {
-                        pageElement.classList.add('active');
-                    } else {
-                        console.error(`Página no encontrada: ${pageName}`);
-                    }
-                    
-                    // Actualizar enlaces
-                    document.querySelectorAll('.nav-link, [data-page]').forEach(link => {
-                        link.classList.remove('active');
-                        if (link.getAttribute('data-page') === pageName) {
-                            link.classList.add('active');
-                        }
-                    });
-                    
-                    // Inicializar tablas en la página destino
-                    setTimeout(() => {
-                        if (window.paginationSystem && typeof window.paginationSystem.initPageTables === 'function') {
-                            window.paginationSystem.initPageTables(pageName);
-                        }
-                    }, 500);
-                }
-            };
-        }
-    }
-    
-    // Inicializar sistema de paginación
+    // 2. Inicializar sistema de paginación si está disponible
     if (window.paginationSystem && typeof window.paginationSystem.init === 'function') {
         window.paginationSystem.init();
-    } else {
-        console.error('⚠️ No se pudo inicializar el sistema de paginación');
+    } else if (!isModuleLoaded('paginationSystem')) {
+        console.log('Sistema de paginación no disponible, cargando script...');
         
-        // Cargar sistema de paginación como último recurso
-        if (typeof initPaginationSystem === 'function') {
-            initPaginationSystem();
-        }
+        // Cargar script de paginación
+        loadScript('/js/pagination-fix.js', () => {
+            if (window.paginationSystem && typeof window.paginationSystem.init === 'function') {
+                window.paginationSystem.init();
+            } else {
+                console.log('No se pudo cargar el sistema de paginación');
+            }
+        });
     }
     
-    // Arreglar las referencias cruzadas entre los sistemas
-    if (window.navigationSystem && window.paginationSystem) {
-        console.log('✅ Ambos sistemas iniciados correctamente');
-    }
+    // 3. Asegurar que loadPage está disponible y configurado correctamente
+    setupLoadPageFunction();
     
-    // Configurar los enlaces de navegación
+    // 4. Configurar los enlaces de navegación
     fixNavigationLinks();
     
-    // Forzar la inicialización de la página actual
+    // 5. Asegurar la inicialización de la página actual
     const currentPage = window.currentPage || detectActivePage();
     if (currentPage) {
         console.log(`Inicializando la página actual: ${currentPage}`);
         
-        if (window.paginationSystem && window.paginationSystem.initPageTables) {
-            window.paginationSystem.initPageTables(currentPage);
+        // Usar el sistema de navegación si está disponible
+        if (window.navigationSystem && window.navigationSystem.initializePage) {
+            setTimeout(() => window.navigationSystem.initializePage(currentPage), 500);
         }
+        
+        // Inicializar tablas de la página actual
+        if (window.paginationSystem && window.paginationSystem.initPageTables) {
+            setTimeout(() => window.paginationSystem.initPageTables(currentPage), 800);
+        }
+    }
+    
+    // Marcar como inicializado
+    window.systemsInitialized = true;
+}
+
+// Crear sistema de navegación alternativo si el principal falla
+function createFallbackNavigationSystem() {
+    console.log('Creando sistema de navegación alternativo');
+    
+    window.navigationSystem = {
+        navigateTo: function(pageName) {
+            console.log(`Navegación de respaldo a: ${pageName}`);
+            
+            // Actualizar estado
+            window.currentPage = pageName;
+            
+            // Ocultar todas las páginas
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Mostrar la página destino
+            const pageElement = document.getElementById(pageName);
+            if (pageElement) {
+                pageElement.classList.add('active');
+            } else {
+                console.error(`Página no encontrada: ${pageName}`);
+            }
+            
+            // Actualizar enlaces
+            document.querySelectorAll('.nav-link, [data-page]').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('data-page') === pageName) {
+                    link.classList.add('active');
+                }
+            });
+            
+            // Inicializar la página según sea necesario
+            const initFunction = getPageInitFunction(pageName);
+            if (initFunction && typeof window[initFunction] === 'function') {
+                setTimeout(() => window[initFunction](), 300);
+            }
+            
+            // Inicializar tablas en la página destino
+            setTimeout(() => {
+                if (window.paginationSystem && typeof window.paginationSystem.initPageTables === 'function') {
+                    window.paginationSystem.initPageTables(pageName);
+                }
+            }, 500);
+        }
+    };
+}
+
+// Obtener función de inicialización para una página específica
+function getPageInitFunction(pageName) {
+    const initFunctions = {
+        'dashboard': 'loadDashboardData',
+        'clientes': 'initClientesPage',
+        'prestamos': 'initPrestamosPage',
+        'pagos': 'initPagosPage',
+        'nuevo-prestamo': 'initNuevoPrestamoPage',
+        'reportes': 'initReportesPage'
+    };
+    
+    return initFunctions[pageName];
+}
+
+// Configurar la función loadPage para navegación
+function setupLoadPageFunction() {
+    // Si loadPage ya existe, sobrescribirla para integrarla con el sistema de navegación
+    if (typeof window.loadPage === 'function') {
+        const originalLoadPage = window.loadPage;
+        
+        window.loadPage = function(pageName) {
+            // Si el sistema de navegación está disponible, usarlo
+            if (window.navigationSystem && typeof window.navigationSystem.navigateTo === 'function') {
+                window.navigationSystem.navigateTo(pageName);
+            } else {
+                // De lo contrario, usar la función original
+                originalLoadPage(pageName);
+            }
+        };
+    } else {
+        // Si loadPage no existe, crearla
+        window.loadPage = function(pageName) {
+            if (window.navigationSystem && typeof window.navigationSystem.navigateTo === 'function') {
+                window.navigationSystem.navigateTo(pageName);
+            } else {
+                // Navegación simple
+                window.currentPage = pageName;
+                
+                // Ocultar todas las páginas
+                document.querySelectorAll('.page-content').forEach(page => {
+                    page.classList.remove('active');
+                });
+                
+                // Mostrar la página destino
+                const pageElement = document.getElementById(pageName);
+                if (pageElement) {
+                    pageElement.classList.add('active');
+                }
+                
+                // Actualizar enlaces
+                document.querySelectorAll('.nav-link, [data-page]').forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('data-page') === pageName) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+        };
     }
 }
 
@@ -224,6 +301,20 @@ function fixNavigationLinks() {
     console.log('✅ Enlaces de navegación configurados correctamente');
 }
 
+// Manejo global de errores para prevenir bloqueos
+window.addEventListener('error', function(event) {
+    console.error('Error capturado:', event.error);
+    
+    // Errores específicos que podemos manejar
+    if (event.error && (
+        event.error.toString().includes('NavigationSystem') ||
+        event.error.toString().includes('redeclaration')
+    )) {
+        console.warn('Error de redeclaración detectado, controlado para evitar bloqueo');
+        event.preventDefault();
+    }
+});
+
 // Iniciar sistemas cuando el DOM esté completamente cargado
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSystems);
@@ -231,3 +322,13 @@ if (document.readyState === 'loading') {
     // Si el DOM ya está cargado, iniciar sistemas de inmediato
     initSystems();
 }
+
+// Exponer funciones públicas
+window.reinitialsizeSystems = initSystems;
+window.reloadPage = function(pageName) {
+    if (pageName && window.navigationSystem) {
+        window.navigationSystem.navigateTo(pageName);
+    } else if (window.currentPage && window.navigationSystem) {
+        window.navigationSystem.navigateTo(window.currentPage);
+    }
+};

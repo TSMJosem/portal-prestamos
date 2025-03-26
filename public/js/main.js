@@ -1749,3 +1749,13 @@ window.formatCurrency = formatCurrency;
 window.registrarPago = registrarPago;
 window.verCliente = verCliente;
 window.diagnosticarNavegacion = diagnosticarNavegacion;
+
+// Al final de tu archivo main.js
+window.addEventListener('error', function(event) {
+    console.error('Error capturado:', event.error);
+    // Evitar que errores de script bloqueen la navegación
+    if (event.error && event.error.toString().includes('NavigationSystem')) {
+        event.preventDefault();
+        console.warn('Error de navegación detectado y controlado');
+    }
+});
