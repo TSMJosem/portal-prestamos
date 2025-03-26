@@ -1271,6 +1271,78 @@ function notificarCambiosClientes(accion, datos) {
     }
 }
 
+// Añada esta función a su archivo clientes-fixed.js
+
+// Función para filtrar clientes según el texto de búsqueda
+function filtrarClientes() {
+    const textoBusqueda = document.getElementById('buscarCliente').value.toLowerCase().trim();
+    console.log(`🔍 Filtrando clientes con texto: "${textoBusqueda}"`);
+    
+    // Obtener clientes desde caché o variable global
+    const clientes = window.clientesCache && window.clientesCache.datos ? 
+                     window.clientesCache.datos : window.clientes || [];
+    
+    if (!clientes.length) {
+        console.log('No hay datos de clientes para filtrar');
+        return;
+    }
+    
+    // Si la búsqueda está vacía, mostrar todos los clientes
+    if (!textoBusqueda) {
+        mostrarClientesEnTabla(clientes);
+        return;
+    }
+    
+    // Filtrar clientes basados en el texto de búsqueda
+    const clientesFiltrados = clientes.filter(cliente => {
+        // Buscar en múltiples campos para mejorar la experiencia
+        return (
+            (cliente.nombreCompleto && cliente.nombreCompleto.toLowerCase().includes(textoBusqueda)) ||
+            (cliente.numeroDocumento && cliente.numeroDocumento.toLowerCase().includes(textoBusqueda)) ||
+            (cliente.telefono && cliente.telefono.toLowerCase().includes(textoBusqueda)) ||
+            (cliente.correoElectronico && cliente.correoElectronico.toLowerCase().includes(textoBusqueda))
+        );
+    });
+    
+    console.log(`Encontrados ${clientesFiltrados.length} clientes que coinciden con la búsqueda`);
+    
+    // Actualizar tabla con resultados filtrados
+    mostrarClientesEnTabla(clientesFiltrados);
+    
+    // Actualizar contador indicando que son resultados filtrados
+    const contador = document.getElementById('totalClientes');
+    if (contador) {
+        const textoContador = clientesFiltrados.length === clientes.length ? 
+                             clientesFiltrados.length : 
+                             `${clientesFiltrados.length} (filtrados de ${clientes.length})`;
+        contador.textContent = textoContador;
+    }
+}
+
+// Añada esto a sus funciones de inicialización o dentro de una existente
+function inicializarBusquedaClientes() {
+    const inputBusqueda = document.getElementById('buscarCliente');
+    if (inputBusqueda) {
+        // Eliminar listeners existentes para evitar duplicados
+        const nuevoInput = inputBusqueda.cloneNode(true);
+        inputBusqueda.parentNode.replaceChild(nuevoInput, inputBusqueda);
+        
+        // Añadir evento keyup para filtrado en tiempo real
+        nuevoInput.addEventListener('keyup', function(e) {
+            // Retrasar el filtrado para mejorar rendimiento - solo filtrar después de una breve pausa en la escritura
+            if (window.timeoutBusqueda) {
+                clearTimeout(window.timeoutBusqueda);
+            }
+            
+            window.timeoutBusqueda = setTimeout(filtrarClientes, 300);
+        });
+        
+        console.log('✅ Búsqueda en tiempo real inicializada correctamente');
+    } else {
+        console.log('⚠️ Campo de búsqueda no encontrado');
+    }
+}
+
 // SECCIÓN 4: FUNCIONES AUXILIARES
 // ==============================
 

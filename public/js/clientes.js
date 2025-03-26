@@ -14,7 +14,7 @@ window.ultimaCargaClientes = 0;
 // Función principal de inicialización - DEBE SER GLOBAL
 function initClientesPage() {
     console.log('Inicializando página de clientes...');
-    
+
     // NUEVO: Evitar doble inicialización en la misma sesión
     if (window.clientesModuloInicializado) {
         console.log('El módulo de clientes ya fue inicializado, verificando estado...');
