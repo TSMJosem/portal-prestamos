@@ -974,33 +974,8 @@ function crearModalNuevoCliente() {
     document.body.appendChild(modalContainer);
 }
 
-// Función para guardar nuevo cliente
+// Función mejorada para guardar un nuevo cliente
 function guardarNuevoCliente() {
-
-    // Cerrar modal
-try {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
-        if (modal) {
-            modal.hide();
-            // Solución para eliminar el backdrop huérfano
-            setTimeout(() => {
-                document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-                    backdrop.remove();
-                });
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            }, 300);
-        }
-    } catch (error) {
-        console.error('Error al cerrar modal:', error);
-        // Solución de respaldo para backdrop
-        document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-            backdrop.remove();
-        });
-        document.body.classList.remove('modal-open');
-    }
-
     console.log('💾 Guardando nuevo cliente (mejorado)...');
     
     const form = document.getElementById('formNuevoCliente');
@@ -1052,32 +1027,65 @@ try {
         return response.json();
     })
     .then(nuevoCliente => {
-        console.log('Cliente creado:', nuevoCliente);
+        console.log('Cliente creado exitosamente:', nuevoCliente);
         
-        // Actualizar caché asegurando no duplicación
+        // MEJORA 1: Asegurar que clientesCache exista
+        if (!window.clientesCache) {
+            window.clientesCache = { datos: [], timestamp: Date.now() };
+        }
+        
+        // MEJORA 2: Actualizar caché explícitamente
         if (window.clientesCache && window.clientesCache.datos) {
-            // Verificar si ya existe para evitar duplicados
-            const existe = window.clientesCache.datos.some(c => c.clienteId === nuevoCliente.clienteId);
+            // Verificar si ya existe el cliente para evitar duplicados
+            const existe = window.clientesCache.datos.some(c => 
+                c.clienteId === nuevoCliente.clienteId || 
+                (c.numeroDocumento === nuevoCliente.numeroDocumento && c.tipoDocumento === nuevoCliente.tipoDocumento)
+            );
+            
             if (!existe) {
-                window.clientesCache.datos.push(nuevoCliente);
+                // Agregar cliente al principio del array para que aparezca primero en la tabla
+                window.clientesCache.datos.unshift(nuevoCliente);
+                console.log(`Cliente agregado a caché, total: ${window.clientesCache.datos.length}`);
+                
+                // Actualizar timestamp para marcar caché como reciente
+                window.clientesCache.timestamp = Date.now();
+            } else {
+                console.warn('Cliente ya existente en caché, actualizando datos...');
+                // Actualizar el cliente existente
+                const index = window.clientesCache.datos.findIndex(c => 
+                    c.clienteId === nuevoCliente.clienteId || 
+                    (c.numeroDocumento === nuevoCliente.numeroDocumento && c.tipoDocumento === nuevoCliente.tipoDocumento)
+                );
+                if (index !== -1) {
+                    window.clientesCache.datos[index] = nuevoCliente;
+                }
             }
         }
         
-        // Actualizar variable global
+        // MEJORA 3: Actualizar variable global para compatibilidad
         if (Array.isArray(window.clientes)) {
-            // Verificar si ya existe para evitar duplicados
-            const existe = window.clientes.some(c => c.clienteId === nuevoCliente.clienteId);
+            const existe = window.clientes.some(c => 
+                c.clienteId === nuevoCliente.clienteId || 
+                (c.numeroDocumento === nuevoCliente.numeroDocumento && c.tipoDocumento === nuevoCliente.tipoDocumento)
+            );
+            
             if (!existe) {
-                window.clientes.push(nuevoCliente);
+                window.clientes.unshift(nuevoCliente); // Agregar al principio
+            } else {
+                // Actualizar el cliente existente
+                const index = window.clientes.findIndex(c => 
+                    c.clienteId === nuevoCliente.clienteId || 
+                    (c.numeroDocumento === nuevoCliente.numeroDocumento && c.tipoDocumento === nuevoCliente.tipoDocumento)
+                );
+                if (index !== -1) {
+                    window.clientes[index] = nuevoCliente;
+                }
             }
         } else {
             window.clientes = [nuevoCliente];
         }
         
-        // Actualizar tabla
-        mostrarClientesEnTabla(window.clientesCache.datos || window.clientes);
-        
-        // Cerrar modal
+        // MEJORA 4: Cerrar modal primero para mejor UX
         try {
             const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente'));
             if (modal) {
@@ -1092,11 +1100,39 @@ try {
             form.reset();
         }
         
-        // Mostrar notificación de éxito
+        // MEJORA 5: Mostrar notificación de éxito
         showNotification('Cliente guardado correctamente', 'success');
         
-        // NUEVO: Notificar a otros módulos sobre la creación
+        // MEJORA 6: Notificar a otros módulos sobre la creación con más información
         notificarCambiosClientes('crear', nuevoCliente);
+        
+        // MEJORA 7: Actualizar tabla con retraso para asegurar carga completa
+        setTimeout(() => {
+            console.log('Actualizando la visualización de la tabla después de crear cliente...');
+            // Intentar diferentes métodos para asegurar la actualización de la tabla
+            if (typeof mostrarClientesEnTabla === 'function') {
+                const datos = window.clientesCache?.datos || window.clientes || [];
+                mostrarClientesEnTabla(datos);
+                console.log('Tabla actualizada con mostrarClientesEnTabla()');
+            } else if (typeof window.mostrarClientesEnTabla === 'function') {
+                const datos = window.clientesCache?.datos || window.clientes || [];
+                window.mostrarClientesEnTabla(datos);
+                console.log('Tabla actualizada con window.mostrarClientesEnTabla()');
+            } else if (typeof window.actualizarTablaClientes === 'function') {
+                window.actualizarTablaClientes();
+                console.log('Tabla actualizada con window.actualizarTablaClientes()');
+            } else if (typeof garantizarCargaClientes === 'function') {
+                garantizarCargaClientes();
+                console.log('Tabla actualizada con garantizarCargaClientes()');
+            } else {
+                console.warn('⚠️ No se encontró función para actualizar la tabla');
+                // Intentar realizar una última actualización forzada
+                const tbody = document.querySelector('#tablaClientes tbody');
+                if (tbody) {
+                    actualizarTablaPorDOM(window.clientesCache?.datos || window.clientes || []);
+                }
+            }
+        }, 500); // Esperar 500ms para asegurar que las operaciones asíncronas se completen
     })
     .catch(error => {
         console.error('Error al guardar cliente:', error);
@@ -1109,6 +1145,130 @@ try {
             btnGuardar.innerHTML = textoOriginal;
         }
     });
+}
+
+// NUEVA FUNCIÓN: Actualización forzada por DOM como último recurso
+function actualizarTablaPorDOM(clientes) {
+    console.log('🔄 Realizando actualización forzada de tabla por DOM...');
+    
+    const tbody = document.querySelector('#tablaClientes tbody');
+    if (!tbody) {
+        console.error('No se encontró tbody para actualización forzada');
+        return;
+    }
+    
+    // Limpiar tabla
+    tbody.innerHTML = '';
+    
+    // Si no hay clientes, mostrar mensaje
+    if (!clientes || clientes.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-4">
+                    <i class="fas fa-users text-muted me-2"></i>
+                    No hay clientes registrados
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Agregar clientes a la tabla
+    clientes.forEach(cliente => {
+        try {
+            const fila = document.createElement('tr');
+            
+            fila.innerHTML = `
+                <td>${cliente.nombreCompleto || 'N/A'}</td>
+                <td>${cliente.tipoDocumento || 'N/A'}: ${cliente.numeroDocumento || 'N/A'}</td>
+                <td>${cliente.telefono || 'N/A'}</td>
+                <td>${cliente.correoElectronico || '-'}</td>
+                <td>
+                    <span class="badge ${cliente.estado === 'Activo' ? 'bg-success' : 'bg-secondary'}">
+                        ${cliente.estado || 'N/A'}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-editar" 
+                                data-id="${cliente.clienteId}" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-info btn-prestamos" 
+                                data-id="${cliente.clienteId}" title="Ver préstamos">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-eliminar" 
+                                data-id="${cliente.clienteId}" title="Eliminar">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(fila);
+        } catch (error) {
+            console.error('Error al renderizar cliente:', error);
+        }
+    });
+    
+    // Actualizar contadores si están disponibles
+    if (typeof actualizarContador === 'function') {
+        actualizarContador(clientes.length);
+    } else {
+        const contador = document.getElementById('totalClientes');
+        if (contador) contador.textContent = clientes.length;
+        
+        const contadorOculto = document.getElementById('contadorClientes');
+        if (contadorOculto) contadorOculto.textContent = clientes.length;
+    }
+    
+    // Configurar eventos de botones si están disponibles
+    if (typeof configurarBotonesAccion === 'function') {
+        setTimeout(configurarBotonesAccion, 100);
+    }
+    
+    console.log('✅ Actualización forzada completada');
+}
+
+// FUNCIÓN MEJORADA: Notificar cambios en clientes a otros módulos
+function notificarCambiosClientes(accion, datos) {
+    // Verificar si existe el sistema de eventos
+    if (window.appEvents && typeof window.appEvents.emit === 'function') {
+        console.log(`📣 Notificando cambio en clientes: ${accion}`, datos);
+        window.appEvents.emit('clientesActualizados', {
+            accion: accion,
+            datos: datos,
+            timestamp: Date.now()
+        });
+        
+        // MEJORA: Emitir evento específico para actualizaciones de tabla
+        window.appEvents.emit('dataUpdated', {
+            type: 'table',
+            tableId: 'tablaClientes',
+            module: 'clientes',
+            action: accion,
+            timestamp: Date.now()
+        });
+    } else {
+        console.log('Sistema de eventos no disponible para notificar cambios');
+        
+        // Intento alternativo de actualización del dashboard si estamos en otra página
+        if (window.currentPage === 'dashboard' && typeof loadCounters === 'function') {
+            console.log('Actualizando dashboard directamente...');
+            setTimeout(loadCounters, 500);
+        }
+    }
+    
+    // NUEVO: Emitir evento DOM personalizado como respaldo
+    try {
+        const event = new CustomEvent('clienteCreado', { 
+            detail: { accion, datos, timestamp: Date.now() } 
+        });
+        document.dispatchEvent(event);
+        console.log('Evento DOM personalizado emitido: clienteCreado');
+    } catch (error) {
+        console.error('Error al emitir evento DOM:', error);
+    }
 }
 
 // SECCIÓN 4: FUNCIONES AUXILIARES
