@@ -369,8 +369,82 @@
     <script src="/js/modal-fix.js"></script>
     <script src="/js/dashboard-fix.js"></script>
     <script src="/js/cobros-hoy.js"></script>
-    <script src="/js/simulador-cobros.js"></script>
-    <script src="/js/simulador-cobrosfix.js"></script>
+    <script src="/js/dashboard-pagos-proximos.js"></script>
+
+    <!-- <script src="/js/simulador-cobros.js"></script> -->
+    <!-- <script src="/js/simulador-cobrosfix.js"></script> -->
+
+    <script>
+        // Función para asegurarse que los encabezados de las tarjetas de gráficos 
+        // tengan la estructura correcta para los controles de navegación
+        function prepareChartHeadersForNavigation() {
+            // 1. Gráfica de préstamos por mes
+            const prestamoCard = document.querySelector('#prestamosPorMesChart').closest('.card');
+            if (prestamoCard) {
+                const prestamoHeader = prestamoCard.querySelector('.card-header');
+                if (prestamoHeader && !prestamoHeader.classList.contains('d-flex')) {
+                    prestamoHeader.classList.add('d-flex', 'justify-content-between', 'align-items-center');
+                    
+                    // Asegurar que el título esté en un elemento h6
+                    const titulo = prestamoHeader.querySelector('h6');
+                    if (!titulo) {
+                        const textoHeader = prestamoHeader.textContent.trim();
+                        prestamoHeader.innerHTML = '';
+                        
+                        const h6 = document.createElement('h6');
+                        h6.className = 'm-0 font-weight-bold text-primary';
+                        h6.textContent = textoHeader || 'Préstamos por Mes';
+                        
+                        prestamoHeader.appendChild(h6);
+                    }
+                }
+            }
+            
+            // 2. Gráfica de pagos por mes
+            const pagosCard = document.querySelector('#pagosPorMesChart').closest('.card');
+            if (pagosCard) {
+                const pagosHeader = pagosCard.querySelector('.card-header');
+                if (pagosHeader && !pagosHeader.classList.contains('d-flex')) {
+                    pagosHeader.classList.add('d-flex', 'justify-content-between', 'align-items-center');
+                    
+                    // Asegurar que el título esté en un elemento h6
+                    const titulo = pagosHeader.querySelector('h6');
+                    if (!titulo) {
+                        const textoHeader = pagosHeader.textContent.trim();
+                        pagosHeader.innerHTML = '';
+                        
+                        const h6 = document.createElement('h6');
+                        h6.className = 'm-0 font-weight-bold text-primary';
+                        h6.textContent = textoHeader || 'Pagos por Mes';
+                        
+                        pagosHeader.appendChild(h6);
+                    }
+                }
+            }
+        }
+        
+        // Ejecutar cuando el DOM esté cargado
+        document.addEventListener('DOMContentLoaded', function() {
+            // Primera ejecución después de la carga inicial
+            setTimeout(prepareChartHeadersForNavigation, 500);
+            
+            // Segunda ejecución para asegurar que los cambios hayan sido aplicados
+            setTimeout(prepareChartHeadersForNavigation, 1500);
+            
+            // Configurar para ejecutarse cuando se cambie a la página de dashboard
+            if (window.appEvents && typeof window.appEvents.on === 'function') {
+                window.appEvents.on('pageChanged', function(data) {
+                    if (data.to === 'dashboard') {
+                        setTimeout(prepareChartHeadersForNavigation, 300);
+                    }
+                });
+            }
+        });
+        </script>
+    
+    <!-- Cargar los scripts de gráficas interactivas -->
+    <script src="/js/dashboard-charts.js"></script>
+    <script src="/js/dashboard-data-provider.js"></script>
 
     <!-- Script de integración para paginación -->
     <script src="/js/table-paginator-fix.js"></script>
