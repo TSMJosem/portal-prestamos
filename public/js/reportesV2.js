@@ -1893,7 +1893,10 @@ function exportarAPDF(contenedor, titulo, nombreArchivo) {
         scale: 1.5, // Mayor calidad
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        removeContainer: true, // Importante para evitar problemas con algunos elementos
+        allowTaint: true, // Permitir elementos que pueden "manchar" el canvas
+        foreignObjectRendering: false // Desactivar renderizado de objetos extraños que pueden causar problemas
     }).then(canvas => {
         // Limpiar el elemento clonado del DOM
         document.body.removeChild(contenidoClonado);
@@ -2307,14 +2310,18 @@ function hideLoadingIndicator() {
 
 // Muestra una notificación en la interfaz
 function showNotification(message, type = 'info') {
-    // Verificar si existe la función global
-    if (typeof window.showNotification === 'function') {
-        window.showNotification(message, type);
+    // Crear un ID único para esta notificación para evitar confusiones
+    const notificationId = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    
+    // Verificar si existe la función global que no sea esta misma
+    if (typeof window.globalShowNotification === 'function') {
+        window.globalShowNotification(message, type);
         return;
     }
     
-    // Implementación local si no existe la función global
+    // Implementación local
     const notification = document.createElement('div');
+    notification.id = notificationId;
     notification.className = `toast-notification ${type}`;
     notification.innerHTML = `
         <div class="toast-header">
@@ -2363,7 +2370,9 @@ function showNotification(message, type = 'info') {
             notification.style.opacity = '0';
             notification.style.transform = 'translateY(-20px)';
             setTimeout(() => {
-                notification.remove();
+                if (document.getElementById(notificationId)) {
+                    document.getElementById(notificationId).remove();
+                }
             }, 300);
         });
     }
@@ -2376,13 +2385,19 @@ function showNotification(message, type = 'info') {
     
     // Ocultar después de 5 segundos
     setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateY(-20px)';
-        
-        // Eliminar del DOM después de la animación
-        setTimeout(() => {
-            notification.remove();
-        }, 300);
+        // Verificar que la notificación todavía existe
+        const notificationElement = document.getElementById(notificationId);
+        if (notificationElement) {
+            notificationElement.style.opacity = '0';
+            notificationElement.style.transform = 'translateY(-20px)';
+            
+            // Eliminar del DOM después de la animación
+            setTimeout(() => {
+                if (document.getElementById(notificationId)) {
+                    document.getElementById(notificationId).remove();
+                }
+            }, 300);
+        }
     }, 5000);
 }
 
